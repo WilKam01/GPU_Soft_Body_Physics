@@ -21,6 +21,7 @@ project "project"
     includedirs {
         "src",
 	    "%{includeDir.glfw}",
+	    "%{includeDir.glm}",
 	    "%{includeDir.vulkanSDK}"
     }
 

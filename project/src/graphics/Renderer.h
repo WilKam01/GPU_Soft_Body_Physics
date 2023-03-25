@@ -5,6 +5,13 @@
 #include "SwapChain.h"
 #include "CommandPool.h"
 #include "CommandBufferArray.h"
+#include "Buffer.h"
+
+struct Vertex
+{
+	glm::vec3 position;
+	glm::vec3 color;
+};
 
 class Renderer
 {
@@ -26,15 +33,19 @@ private:
 	CommandPool m_commandPool;
 	CommandBufferArray m_commandBufferArray;
 
+	Buffer m_vertexBuffer;
+	Buffer m_indexBuffer;
+
 	std::vector<VkSemaphore> m_imageAvailableSemaphores;
 	std::vector<VkSemaphore> m_renderFinishedSemaphores;
 	std::vector<VkFence> m_inFlightFences;
 
 	void createPipelineLayout();
 	void createGraphicsPipeline();
-	void createCommandBuffers();
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 	void createSyncObjects();
+
+	void createMeshBuffers();
 
 	void recreateSwapChain();
 public:

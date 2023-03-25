@@ -19,7 +19,7 @@ void CommandPool::cleanup()
     vkDestroyCommandPool(p_device->getLogical(), m_commandPool, nullptr);
 }
 
-void CommandPool::beginSingleTimeCommand(VkCommandBuffer& buffer)
+VkCommandBuffer CommandPool::beginSingleTimeCommand()
 {
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -35,9 +35,10 @@ void CommandPool::beginSingleTimeCommand(VkCommandBuffer& buffer)
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    return commandBuffer;
 }
 
-void CommandPool::endSingleTimeCommand(VkCommandBuffer& buffer)
+void CommandPool::endSingleTimeCommand(VkCommandBuffer buffer)
 {
     vkEndCommandBuffer(buffer);
 
@@ -50,4 +51,17 @@ void CommandPool::endSingleTimeCommand(VkCommandBuffer& buffer)
     vkQueueWaitIdle(p_device->getGraphicsQueue());
 
     vkFreeCommandBuffers(p_device->getLogical(), m_commandPool, 1, &buffer);
+}
+
+void CommandPool::copyBuffer(Buffer& src, Buffer& dst, VkDeviceSize size)
+{
+    VkCommandBuffer commandBuffer = beginSingleTimeCommand();
+
+    VkBufferCopy copyRegion{};
+    copyRegion.srcOffset = 0;
+    copyRegion.dstOffset = 0;
+    copyRegion.size = size;
+    vkCmdCopyBuffer(commandBuffer, src.get(), dst.get(), 1, &copyRegion);
+
+    endSingleTimeCommand(commandBuffer);
 }

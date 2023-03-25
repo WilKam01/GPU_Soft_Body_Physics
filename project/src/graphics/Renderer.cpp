@@ -35,12 +35,19 @@ void Renderer::createGraphicsPipeline()
 
 	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
+    VkVertexInputBindingDescription vertexInputBindingDesc = { 0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX };
+    VkVertexInputAttributeDescription vertexInputAttributeDesc[2] = 
+    {
+        { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position) },
+        { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, color) },
+    };
+
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = 0;
-    vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
-    vertexInputInfo.vertexAttributeDescriptionCount = 0;
-    vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.pVertexBindingDescriptions = &vertexInputBindingDesc;
+    vertexInputInfo.vertexAttributeDescriptionCount = 2;
+    vertexInputInfo.pVertexAttributeDescriptions = vertexInputAttributeDesc;
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -162,7 +169,12 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdSetScissor(commandBuffer, 0, 1, &m_scissor);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+    VkBuffer vertexBuffers[] = { m_vertexBuffer.get() };
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer.get(), 0, VK_INDEX_TYPE_UINT32);
+
+    vkCmdDrawIndexed(commandBuffer, 3, 1, 0, 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
 }
@@ -190,6 +202,58 @@ void Renderer::createSyncObjects()
     }
 }
 
+void Renderer::createMeshBuffers()
+{
+    static Vertex vertices[]
+    {
+        { glm::vec3(0.0f, -0.5f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f) },
+        { glm::vec3(0.5f, 0.5f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) },
+        { glm::vec3(-0.5f, 0.5f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f) },
+        //{ glm::vec3(-0.5f, 0.5f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f) },
+    };
+
+    static uint32_t indices[]{ 0, 1, 2 };
+
+    // Vertex buffer
+    VkDeviceSize bufferSize = sizeof(vertices);
+    Buffer stagingBuffer;
+    stagingBuffer.init(m_device,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        bufferSize,
+        vertices
+    );
+
+    m_vertexBuffer.init(m_device,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        bufferSize
+    );
+
+    m_commandPool.copyBuffer(stagingBuffer, m_vertexBuffer, bufferSize);
+
+    stagingBuffer.cleanup();
+
+    // Index buffer
+    bufferSize = sizeof(indices);
+    stagingBuffer.init(m_device,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        bufferSize,
+        indices
+    );
+
+    m_indexBuffer.init(m_device,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        bufferSize
+    );
+
+    m_commandPool.copyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
+
+    stagingBuffer.cleanup();
+}
+
 void Renderer::recreateSwapChain()
 {
     m_swapChain.recreate();
@@ -209,12 +273,17 @@ void Renderer::init(Window& window)
     m_commandPool.init(m_device);
     m_commandBufferArray.init(m_device, m_commandPool, MAX_FRAMES_IN_FLIGHT);
     createSyncObjects();
+
+    createMeshBuffers();
 }
 
 void Renderer::cleanup()
 {
     m_device.waitIdle();
     VkDevice device = m_device.getLogical();
+
+    m_indexBuffer.cleanup();
+    m_vertexBuffer.cleanup();
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroySemaphore(device, m_renderFinishedSemaphores[i], nullptr);

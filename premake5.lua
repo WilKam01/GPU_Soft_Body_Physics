@@ -13,6 +13,7 @@ Vulkan_SDK = os.getenv("VULKAN_SDK")
 -- external includes
 includeDir = {
     glfw = "%{wks.location}/external/glfw/include",
+    glm = "%{wks.location}/external/glm",
     vulkanSDK = "%{Vulkan_SDK}/Include",
 }
 

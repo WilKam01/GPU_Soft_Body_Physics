@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Device.h"
+#include "Buffer.h"
 
 class CommandPool
 {
@@ -11,8 +12,9 @@ public:
 	void init(Device& device);
 	void cleanup();
 
-	void beginSingleTimeCommand(VkCommandBuffer& buffer);
-	void endSingleTimeCommand(VkCommandBuffer& buffer);
+	VkCommandBuffer beginSingleTimeCommand();
+	void endSingleTimeCommand(VkCommandBuffer buffer);
+	void copyBuffer(Buffer& src, Buffer& dst, VkDeviceSize size);
 
 	inline VkCommandPool get() { return m_commandPool; }
 };

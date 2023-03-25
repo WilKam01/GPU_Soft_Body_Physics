@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <set>
 
+#include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
 #include "dev/Log.h"

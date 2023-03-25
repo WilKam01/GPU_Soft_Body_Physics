@@ -20,7 +20,7 @@ public:
 		VkBufferUsageFlags usageFlags,
 		VkMemoryPropertyFlags memoryPropertyFlags,
 		VkDeviceSize size,
-		void* data
+		void* data = nullptr
 	);
 	void cleanup();
 
@@ -30,7 +30,7 @@ public:
 	VkResult flush(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
 	VkResult bind(VkDeviceSize offset = 0);
 
-	inline VkBuffer getBuffer() { return m_buffer; }
+	inline VkBuffer get() { return m_buffer; }
 	inline void* getMapped() { return m_mapped; }
 	inline VkDeviceMemory getMemory() { return m_memory; }
 	inline VkDeviceSize getSize() { return m_size; }
