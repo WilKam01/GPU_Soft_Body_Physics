@@ -9,6 +9,7 @@ class ImGuiRenderer
 private:
 	Device* p_device;
 	SwapChain* p_swapChain;
+	Buffer* p_vertexBuffer;
 
 	VkRenderPass m_renderPass;
 	VkDescriptorPool m_descriptorPool;
@@ -17,7 +18,7 @@ private:
 	void createRenderPass();
 	void createFramebuffers();
 public:
-	void init(Window& window, Instance& instance, Device& device, SwapChain& swapChain, CommandPool& commandPool);
+	void init(Window& window, Instance& instance, Device& device, SwapChain& swapChain, CommandPool& commandPool, Buffer* vertexBuffer);
 	void cleanup();
 	void recreateFramebuffers();
 

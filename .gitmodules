@@ -1,6 +1,7 @@
 [submodule "external/glfw"]
 	path = external/glfw
 	url = https://github.com/glfw/glfw.git
+	ignore = dirty
 [submodule "external/glm"]
 	path = external/glm
 	url = https://github.com/g-truc/glm.git
@@ -8,3 +9,4 @@
 	path = external/imgui
 	url = https://github.com/ocornut/imgui.git
 	branch = docking
+	ignore = dirty

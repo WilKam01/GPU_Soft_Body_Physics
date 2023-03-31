@@ -82,10 +82,11 @@ void ImGuiRenderer::createFramebuffers()
     }
 }
 
-void ImGuiRenderer::init(Window& window, Instance& instance, Device& device, SwapChain& swapChain, CommandPool& commandPool)
+void ImGuiRenderer::init(Window& window, Instance& instance, Device& device, SwapChain& swapChain, CommandPool& commandPool, Buffer* vertexBuffer)
 {
     p_device = &device;
     p_swapChain = &swapChain;
+    p_vertexBuffer = vertexBuffer;
 
     createRenderPass();
 
@@ -203,7 +204,20 @@ void ImGuiRenderer::render()
 
     //------------------------------------------
 
-    ImGui::ShowDemoWindow();
+    static Vertex vertices[3];
+    p_vertexBuffer->map();
+    memcpy(vertices, p_vertexBuffer->getMapped(), sizeof(Vertex) * 3);
+
+    ImGui::Begin("Vertex data");
+
+    ImGui::DragFloat3("pos_0", (float*)&vertices[0].position, 0.1f, -1.0f, 1.0f);
+    ImGui::DragFloat3("pos_1", (float*)&vertices[1].position, 0.1f, -1.0f, 1.0f);
+    ImGui::DragFloat3("pos_2", (float*)&vertices[2].position, 0.1f, -1.0f, 1.0f);
+
+    ImGui::End();
+
+    p_vertexBuffer->writeTo(vertices, sizeof(Vertex) * 3);
+    p_vertexBuffer->unmap();
 
     //------------------------------------------
 

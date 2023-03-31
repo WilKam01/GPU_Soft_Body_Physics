@@ -239,7 +239,7 @@ void Renderer::createMeshBuffers()
 
     m_vertexBuffer.init(m_device,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         bufferSize
     );
 
@@ -290,7 +290,7 @@ void Renderer::init(Window& window)
     m_commandBufferArray.init(m_device, m_commandPool, MAX_FRAMES_IN_FLIGHT);
     createSyncObjects();
 
-    m_imGuiRenderer.init(window, m_instance, m_device, m_swapChain, m_commandPool);
+    m_imGuiRenderer.init(window, m_instance, m_device, m_swapChain, m_commandPool, &m_vertexBuffer);
 
     createMeshBuffers();
 }
