@@ -23,6 +23,7 @@ public:
 	const bool shouldClose();
 	const std::vector<const char*> getRequiredExtensions();
 	void createSurface(VkInstance instance, VkSurfaceKHR& surface);
+	void initImGui();
 
 	inline const std::string& getName() const { return m_name; }
 	inline const uint32_t getWidth() const { return m_width; }

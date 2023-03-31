@@ -6,6 +6,7 @@
 #include "CommandPool.h"
 #include "CommandBufferArray.h"
 #include "Buffer.h"
+#include "ImGuiRenderer.h"
 
 struct Vertex
 {
@@ -16,7 +17,7 @@ struct Vertex
 class Renderer
 {
 public:
-	const int MAX_FRAMES_IN_FLIGHT = 2;
+	const static int MAX_FRAMES_IN_FLIGHT = 2;
 private:
 	uint32_t currentFrame;
 
@@ -39,6 +40,8 @@ private:
 	std::vector<VkSemaphore> m_imageAvailableSemaphores;
 	std::vector<VkSemaphore> m_renderFinishedSemaphores;
 	std::vector<VkFence> m_inFlightFences;
+
+	ImGuiRenderer m_imGuiRenderer;
 
 	void createPipelineLayout();
 	void createGraphicsPipeline();

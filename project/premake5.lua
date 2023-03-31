@@ -22,11 +22,13 @@ project "project"
         "src",
 	    "%{includeDir.glfw}",
 	    "%{includeDir.glm}",
+	    "%{includeDir.imgui}",
 	    "%{includeDir.vulkanSDK}"
     }
 
     links {
         "glfw",
+        "imgui",
         "%{libDir.vulkanSDK}"
     }
 

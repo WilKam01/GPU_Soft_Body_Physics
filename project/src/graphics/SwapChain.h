@@ -41,8 +41,10 @@ public:
 	inline VkSwapchainKHR get() { return m_swapChain; }
 	inline VkFormat getFormat() { return m_imageFormat; }
 	inline VkExtent2D getExtent() { return m_extent; }
+	inline int getImageCount() { return (int)m_imageViews.size(); }
 	inline VkRenderPass getRenderPass() { return m_renderPass; }
 
-	inline VkFramebuffer getFramebuffer(uint32_t index) { return m_framebuffers[index]; }
+	inline VkImageView getImageView(size_t i) { return m_imageViews[i]; }
+	inline VkFramebuffer getFramebuffer(size_t i) { return m_framebuffers[i]; }
 };
 

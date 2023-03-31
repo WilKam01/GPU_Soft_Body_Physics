@@ -86,7 +86,7 @@ void Renderer::createGraphicsPipeline()
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT; // TODO: Msaa
     multisampling.sampleShadingEnable = VK_TRUE; // enable sample shading in the pipeline
     multisampling.minSampleShading = .2f; // min fraction for sample shading; closer to one is smooth
     multisampling.pSampleMask = nullptr; // Optional
@@ -164,9 +164,10 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     renderPassInfo.clearValueCount = 1;
     renderPassInfo.pClearValues = &clearColour;
 
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdSetViewport(commandBuffer, 0, 1, &m_viewport);
     vkCmdSetScissor(commandBuffer, 0, 1, &m_scissor);
+
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
     VkBuffer vertexBuffers[] = { m_vertexBuffer.get() };
@@ -175,6 +176,18 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer.get(), 0, VK_INDEX_TYPE_UINT32);
 
     vkCmdDrawIndexed(commandBuffer, 3, 1, 0, 0, 0);
+
+    vkCmdEndRenderPass(commandBuffer);
+
+    m_imGuiRenderer.render();
+
+    renderPassInfo.renderPass = m_imGuiRenderer.getRenderPass();
+    renderPassInfo.framebuffer = m_imGuiRenderer.getFramebuffer(imageIndex);
+    renderPassInfo.clearValueCount = 0;
+
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 
     vkCmdEndRenderPass(commandBuffer);
 }
@@ -260,6 +273,7 @@ void Renderer::recreateSwapChain()
 
     vkDestroyPipeline(m_device.getLogical(), m_graphicsPipeline, nullptr);
     createGraphicsPipeline();
+    m_imGuiRenderer.recreateFramebuffers();
 }
 
 void Renderer::init(Window& window)
@@ -268,11 +282,15 @@ void Renderer::init(Window& window)
 	window.createSurface(m_instance.get(), m_surface);
 	m_device.init(m_instance, m_surface);
 	m_swapChain.init(m_device, m_surface, window);
+
     createPipelineLayout();
     createGraphicsPipeline();
+
     m_commandPool.init(m_device);
     m_commandBufferArray.init(m_device, m_commandPool, MAX_FRAMES_IN_FLIGHT);
     createSyncObjects();
+
+    m_imGuiRenderer.init(window, m_instance, m_device, m_swapChain, m_commandPool);
 
     createMeshBuffers();
 }
@@ -281,6 +299,8 @@ void Renderer::cleanup()
 {
     m_device.waitIdle();
     VkDevice device = m_device.getLogical();
+
+    m_imGuiRenderer.cleanup();
 
     m_indexBuffer.cleanup();
     m_vertexBuffer.cleanup();
@@ -323,6 +343,13 @@ void Renderer::render()
     m_commandBufferArray.begin(currentFrame);
     recordCommandBuffer(m_commandBufferArray[currentFrame], imageIndex);
     m_commandBufferArray.end(currentFrame);
+
+    // Update and Render additional Platform Windows
+    if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+    {
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+    }
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;

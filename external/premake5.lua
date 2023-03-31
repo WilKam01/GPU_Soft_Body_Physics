@@ -6,8 +6,7 @@ project "glfw"
 	targetdir("%{wks.location}/" .. outputdir .. "/bin")
     objdir("%{wks.location}/" .. outputdir .. "/int")
 
-	files
-	{
+	files {
 		"glfw/include/GLFW/glfw3.h",
 		"glfw/include/GLFW/glfw3native.h",
 		"glfw/src/internal.h",
@@ -43,8 +42,7 @@ project "glfw"
 	filter "system:windows"
 		systemversion "latest"
 
-		files
-		{
+		files {
 			"glfw/src/win32_init.c",
 			"glfw/src/win32_joystick.c",
 			"glfw/src/win32_module.c",
@@ -57,8 +55,45 @@ project "glfw"
 			"glfw/src/osmesa_context.c"
 		}
 
-		defines 
-		{ 
+		defines { 
 			"_GLFW_WIN32",
 			"_CRT_SECURE_NO_WARNINGS"
 		}
+
+project "imgui"
+	location "imgui"
+	kind "StaticLib"
+	language "C"
+
+	targetdir("%{wks.location}/" .. outputdir .. "/bin")
+    objdir("%{wks.location}/" .. outputdir .. "/int")
+
+	files {
+		"imgui/*.h",
+		"imgui/*.cpp",
+		"imgui/backends/imgui_impl_glfw.h",
+		"imgui/backends/imgui_impl_glfw.cpp",
+		"imgui/backends/imgui_impl_vulkan.h",
+		"imgui/backends/imgui_impl_vulkan.cpp",
+	}
+
+	includedirs {
+        "imgui",
+		"%{includeDir.glfw}",
+	    "%{includeDir.vulkanSDK}"
+    }
+
+	filter "configurations:Debug"
+        defines "DEBUG"
+        symbols "on"
+
+    filter "configurations:Release"
+        defines "RELEASE"
+        optimize "on"
+
+    filter "configurations:Distribution"
+        defines "DIST"
+        optimize "on"
+
+	filter "system:windows"
+		systemversion "latest"

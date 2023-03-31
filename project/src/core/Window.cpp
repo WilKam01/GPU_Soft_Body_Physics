@@ -61,3 +61,8 @@ void Window::createSurface(VkInstance instance, VkSurfaceKHR& surface)
     if (glfwCreateWindowSurface(instance, m_window, nullptr, &surface) != VK_SUCCESS)
         LOG_ERROR("Failed to create window surface!");
 }
+
+void Window::initImGui()
+{
+    ImGui_ImplGlfw_InitForVulkan(m_window, true);
+}

@@ -5,6 +5,7 @@
 
 # Additional ignores
 *.spv
+**/imgui.ini
 
 # User-specific files
 *.rsuser
@@ -357,3 +358,4 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+external/imgui
