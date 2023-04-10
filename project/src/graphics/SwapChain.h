@@ -23,7 +23,6 @@ private:
 	VkSurfaceKHR m_surface;
 	Window* p_window;
 
-	SwapChainSupportDetails querySupport();
 	VkSurfaceFormatKHR chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR choosePresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 	VkExtent2D chooseExtent(const VkSurfaceCapabilitiesKHR& capabilities);
@@ -38,6 +37,7 @@ public:
 	void recreate();
 	const bool needsRecreation(); const
 
+	static SwapChainSupportDetails querySupport(VkPhysicalDevice device, VkSurfaceKHR surface);
 	inline VkSwapchainKHR get() { return m_swapChain; }
 	inline VkFormat getFormat() { return m_imageFormat; }
 	inline VkExtent2D getExtent() { return m_extent; }

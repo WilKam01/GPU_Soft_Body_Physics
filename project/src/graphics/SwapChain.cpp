@@ -3,34 +3,6 @@
 #include "core/Window.h"
 #include "VkUtilities.h"
 
-SwapChainSupportDetails SwapChain::querySupport()
-{
-	SwapChainSupportDetails details;
-	VkPhysicalDevice device = p_device->getPhysical();
-
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_surface, &details.capabilities);
-
-    uint32_t formatCount;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_surface, &formatCount, nullptr);
-
-    if (formatCount != 0)
-    {
-        details.formats.resize(formatCount);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_surface, &formatCount, details.formats.data());
-    }
-
-    uint32_t presentModeCount;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_surface, &presentModeCount, nullptr);
-
-    if (presentModeCount != 0)
-    {
-        details.presentModes.resize(presentModeCount);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_surface, &presentModeCount, details.presentModes.data());
-    }
-
-    return details;
-}
-
 VkSurfaceFormatKHR SwapChain::chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
 {
     for (const auto& availableFormat : availableFormats)
@@ -74,7 +46,7 @@ VkExtent2D SwapChain::chooseExtent(const VkSurfaceCapabilitiesKHR& capabilities)
 
 void SwapChain::create()
 {
-    SwapChainSupportDetails support = querySupport();
+    SwapChainSupportDetails support = querySupport(p_device->getPhysical(), m_surface);
     VkSurfaceFormatKHR surfaceFormat = chooseSurfaceFormat(support.formats);
     VkPresentModeKHR presentMode = choosePresentMode(support.presentModes);
     VkExtent2D extent = chooseExtent(support.capabilities);
@@ -253,4 +225,31 @@ void SwapChain::recreate()
 const bool SwapChain::needsRecreation()
 {
     return p_window->isMinimized();
+}
+
+const SwapChainSupportDetails SwapChain::querySupport(VkPhysicalDevice device, VkSurfaceKHR surface)
+{
+    SwapChainSupportDetails details;
+
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
+
+    uint32_t formatCount;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+
+    if (formatCount != 0)
+    {
+        details.formats.resize(formatCount);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
+    }
+
+    uint32_t presentModeCount;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
+
+    if (presentModeCount != 0)
+    {
+        details.presentModes.resize(presentModeCount);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
+    }
+
+    return details;
 }

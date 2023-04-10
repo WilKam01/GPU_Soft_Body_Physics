@@ -3,153 +3,6 @@
 #include "core/Window.h"
 #include "VkUtilities.h"
 
-void Renderer::createPipelineLayout()
-{
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 0;
-    pipelineLayoutInfo.pSetLayouts = nullptr;
-    pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
-    pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
-
-    if (vkCreatePipelineLayout(m_device.getLogical(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS)
-        LOG_ERROR("Failed to create pipeline layout!");
-}
-
-void Renderer::createGraphicsPipeline()
-{
-	VkShaderModule vertShaderModule = VkUtils::createShaderModule(m_device.getLogical(), "shaders/vert.spv");
-	VkShaderModule fragShaderModule = VkUtils::createShaderModule(m_device.getLogical(), "shaders/frag.spv");
-
-	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	vertShaderStageInfo.module = vertShaderModule;
-	vertShaderStageInfo.pName = "main";
-
-	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	fragShaderStageInfo.module = fragShaderModule;
-	fragShaderStageInfo.pName = "main";
-
-	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
-
-    VkVertexInputBindingDescription vertexInputBindingDesc = { 0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX };
-    VkVertexInputAttributeDescription vertexInputAttributeDesc[2] = 
-    {
-        { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position) },
-        { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, color) },
-    };
-
-    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = 1;
-    vertexInputInfo.pVertexBindingDescriptions = &vertexInputBindingDesc;
-    vertexInputInfo.vertexAttributeDescriptionCount = 2;
-    vertexInputInfo.pVertexAttributeDescriptions = vertexInputAttributeDesc;
-
-    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-    m_viewport.x = 0.0f;
-    m_viewport.y = 0.0f;
-    m_viewport.width = (float)m_swapChain.getExtent().width;
-    m_viewport.height = (float)m_swapChain.getExtent().height;
-    m_viewport.minDepth = 0.0f;
-    m_viewport.maxDepth = 1.0f;
-
-    m_scissor.offset = { 0, 0 };
-    m_scissor.extent = m_swapChain.getExtent();
-
-    VkPipelineViewportStateCreateInfo viewportState{};
-    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewportState.viewportCount = 1;
-    viewportState.pViewports = &m_viewport;
-    viewportState.scissorCount = 1;
-    viewportState.pScissors = &m_scissor;
-
-    VkPipelineRasterizationStateCreateInfo rasterizer{};
-    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    rasterizer.depthClampEnable = VK_FALSE;
-    rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
-    rasterizer.depthBiasEnable = VK_FALSE;
-    rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-    rasterizer.depthBiasClamp = 0.0f; // Optional
-    rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
-
-    VkPipelineMultisampleStateCreateInfo multisampling{};
-    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT; // TODO: Msaa
-    multisampling.sampleShadingEnable = VK_TRUE; // enable sample shading in the pipeline
-    multisampling.minSampleShading = .2f; // min fraction for sample shading; closer to one is smooth
-    multisampling.pSampleMask = nullptr; // Optional
-    multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
-    multisampling.alphaToOneEnable = VK_FALSE; // Optional
-
-    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    colorBlendAttachment.blendEnable = VK_FALSE;
-    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
-    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
-
-    VkPipelineColorBlendStateCreateInfo colorBlending{};
-    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    colorBlending.logicOpEnable = VK_FALSE;
-    colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
-    colorBlending.attachmentCount = 1;
-    colorBlending.pAttachments = &colorBlendAttachment;
-    colorBlending.blendConstants[0] = 0.0f; // Optional
-    colorBlending.blendConstants[1] = 0.0f; // Optional
-    colorBlending.blendConstants[2] = 0.0f; // Optional
-    colorBlending.blendConstants[3] = 0.0f; // Optional
-
-    std::vector<VkDynamicState> dynamicStates = {
-        VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_LINE_WIDTH
-    };
-
-    VkPipelineDynamicStateCreateInfo dynamicState{};
-    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = (uint32_t)(dynamicStates.size());
-    dynamicState.pDynamicStates = dynamicStates.data();
-
-    VkGraphicsPipelineCreateInfo pipelineInfo{};
-    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipelineInfo.stageCount = 2;
-    pipelineInfo.pStages = shaderStages;
-
-    pipelineInfo.pVertexInputState = &vertexInputInfo;
-    pipelineInfo.pInputAssemblyState = &inputAssembly;
-    pipelineInfo.pViewportState = &viewportState;
-    pipelineInfo.pRasterizationState = &rasterizer;
-    pipelineInfo.pMultisampleState = &multisampling;
-    pipelineInfo.pDepthStencilState = nullptr;
-    pipelineInfo.pColorBlendState = &colorBlending;
-    pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = m_pipelineLayout;
-    pipelineInfo.renderPass = m_swapChain.getRenderPass();
-    pipelineInfo.subpass = 0;
-    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
-    pipelineInfo.basePipelineIndex = -1; // Optional
-
-    if (vkCreateGraphicsPipelines(m_device.getLogical(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) != VK_SUCCESS)
-        LOG_ERROR("Failed to create graphics pipeline!");
-
-    vkDestroyShaderModule(m_device.getLogical(), fragShaderModule, nullptr);
-    vkDestroyShaderModule(m_device.getLogical(), vertShaderModule, nullptr);
-}
-
 void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
     VkRenderPassBeginInfo renderPassInfo{};
@@ -168,7 +21,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdSetScissor(commandBuffer, 0, 1, &m_scissor);
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
 
     VkBuffer vertexBuffers[] = { m_vertexBuffer.get() };
     VkDeviceSize offsets[] = { 0 };
@@ -192,11 +45,22 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdEndRenderPass(commandBuffer);
 }
 
+void Renderer::recordCommandBufferCompute(VkCommandBuffer commandBuffer)
+{
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_computePipeline.get());
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_computePipelineLayout.get(), 0, 1, &m_computeDescriptorSet.get(currentFrame), 0, 0);
+
+    vkCmdDispatch(commandBuffer, 3, 1, 1);
+}
+
 void Renderer::createSyncObjects()
 {
     m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
     m_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
     m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+    m_computeInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+    m_computeFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 
     VkSemaphoreCreateInfo semaphoreInfo{};
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -209,9 +73,11 @@ void Renderer::createSyncObjects()
         if (vkCreateSemaphore(m_device.getLogical(), &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]) != VK_SUCCESS ||
             vkCreateSemaphore(m_device.getLogical(), &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]) != VK_SUCCESS ||
             vkCreateFence(m_device.getLogical(), &fenceInfo, nullptr, &m_inFlightFences[i]) != VK_SUCCESS) 
-        {
             LOG_ERROR("Failed to create synchronization objects for a frame!");
-        }
+
+        if (vkCreateSemaphore(m_device.getLogical(), &semaphoreInfo, nullptr, &m_computeFinishedSemaphores[i]) != VK_SUCCESS ||
+            vkCreateFence(m_device.getLogical(), &fenceInfo, nullptr, &m_computeInFlightFences[i]) != VK_SUCCESS)
+            LOG_ERROR("Failed to create compute synchronization objects for a frame!");
     }
 }
 
@@ -219,13 +85,13 @@ void Renderer::createMeshBuffers()
 {
     static Vertex vertices[]
     {
-        { glm::vec3(0.0f, -0.5f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f) },
-        { glm::vec3(0.5f, 0.5f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) },
-        { glm::vec3(-0.5f, 0.5f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f) },
+        { glm::vec3(0.0f, 0.5f, 0.0f), 0.0f, glm::vec3(1.0f, 0.0f, 0.0f) },
+        { glm::vec3(0.5f, -0.5f, 0.0f), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f) },
+        { glm::vec3(-0.5f, -0.5f, 0.0f), 0.0f, glm::vec3(0.0f, 0.0f, 1.0f) },
         //{ glm::vec3(-0.5f, 0.5f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f) },
     };
 
-    static uint32_t indices[]{ 0, 1, 2 };
+    static uint32_t indices[]{ 1, 0, 2 };
 
     // Vertex buffer
     VkDeviceSize bufferSize = sizeof(vertices);
@@ -238,7 +104,7 @@ void Renderer::createMeshBuffers()
     );
 
     m_vertexBuffer.init(m_device,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         bufferSize
     );
@@ -271,8 +137,16 @@ void Renderer::recreateSwapChain()
 {
     m_swapChain.recreate();
 
-    vkDestroyPipeline(m_device.getLogical(), m_graphicsPipeline, nullptr);
-    createGraphicsPipeline();
+    m_viewport.x = 0.0f;
+    m_viewport.y = (float)m_swapChain.getExtent().height;
+    m_viewport.width = (float)m_swapChain.getExtent().width;
+    m_viewport.height = -((float)m_swapChain.getExtent().height);
+    m_viewport.minDepth = 0.0f;
+    m_viewport.maxDepth = 1.0f;
+    
+    m_scissor.offset = { 0, 0 };
+    m_scissor.extent = m_swapChain.getExtent();
+
     m_imGuiRenderer.recreateFramebuffers();
 }
 
@@ -283,16 +157,53 @@ void Renderer::init(Window& window)
 	m_device.init(m_instance, m_surface);
 	m_swapChain.init(m_device, m_surface, window);
 
-    createPipelineLayout();
-    createGraphicsPipeline();
+    m_viewport.x = 0.0f;
+    m_viewport.y = (float)m_swapChain.getExtent().height;
+    m_viewport.width = (float)m_swapChain.getExtent().width;
+    m_viewport.height = -((float)m_swapChain.getExtent().height);
+    m_viewport.minDepth = 0.0f;
+    m_viewport.maxDepth = 1.0f;
 
-    m_commandPool.init(m_device);
+    m_scissor.offset = { 0, 0 };
+    m_scissor.extent = m_swapChain.getExtent();
+
+    m_graphicsPipelineLayout.init(m_device);
+    m_graphicsPipeline.initGraphics(m_device, m_graphicsPipelineLayout, nullptr, m_swapChain.getRenderPass(), "shaders/vert.spv", "shaders/frag.spv");
+
+    m_computeDescriptorSetLayout.init(m_device,
+    {
+        { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+        { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
+    });
+    m_computeDescriptorSet.init(m_device, m_computeDescriptorSetLayout, MAX_FRAMES_IN_FLIGHT);
+    m_computePipelineLayout.init(m_device, &m_computeDescriptorSetLayout);
+    m_computePipeline.initCompute(m_device, m_computePipelineLayout, &m_computeDescriptorSet, "shaders/comp.spv");
+
+    VkDeviceSize bufferSize = sizeof(float);
+    float dt = 0.0f;
+    m_deltaTimeUBO.resize(MAX_FRAMES_IN_FLIGHT);
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        m_deltaTimeUBO[i].init(m_device, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, bufferSize, &dt);
+    }
+
+    m_commandPool.init(m_device, VK_PIPELINE_BIND_POINT_GRAPHICS);
     m_commandBufferArray.init(m_device, m_commandPool, MAX_FRAMES_IN_FLIGHT);
+
+    m_computeCommandPool.init(m_device, VK_PIPELINE_BIND_POINT_COMPUTE);
+    m_computeCommandBufferArray.init(m_device, m_computeCommandPool, MAX_FRAMES_IN_FLIGHT);
+
     createSyncObjects();
 
     m_imGuiRenderer.init(window, m_instance, m_device, m_swapChain, m_commandPool, &m_vertexBuffer);
 
     createMeshBuffers();
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        m_computeDescriptorSet.writeBuffer(i, 0, m_deltaTimeUBO[i], bufferSize);
+        m_computeDescriptorSet.writeBuffer(i, 1, m_vertexBuffer, m_vertexBuffer.getSize());
+    }
 }
 
 void Renderer::cleanup()
@@ -305,17 +216,36 @@ void Renderer::cleanup()
     m_indexBuffer.cleanup();
     m_vertexBuffer.cleanup();
 
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
+    {
+        vkDestroySemaphore(device, m_computeFinishedSemaphores[i], nullptr);
+        vkDestroyFence(device, m_computeInFlightFences[i], nullptr);
+
         vkDestroySemaphore(device, m_renderFinishedSemaphores[i], nullptr);
         vkDestroySemaphore(device, m_imageAvailableSemaphores[i], nullptr);
         vkDestroyFence(device, m_inFlightFences[i], nullptr);
     }
 
+    m_computeCommandBufferArray.cleanup();
+    m_computeCommandPool.cleanup();
+
     m_commandBufferArray.cleanup();
     m_commandPool.cleanup();
 
-    vkDestroyPipeline(device, m_graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(device, m_pipelineLayout, nullptr);
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        m_deltaTimeUBO[i].cleanup();
+    }
+
+    m_computePipeline.cleanup();
+    m_computePipelineLayout.cleanup();
+
+    m_computeDescriptorSet.cleanup();
+    m_computeDescriptorSetLayout.cleanup();
+
+    m_graphicsPipeline.cleanup();
+    m_graphicsPipelineLayout.cleanup();
+
 	m_swapChain.cleanup();
 	m_device.cleanup();
 	vkDestroySurfaceKHR(m_instance.get(), m_surface, nullptr);
@@ -325,6 +255,30 @@ void Renderer::cleanup()
 void Renderer::render()
 {
     VkDevice device = m_device.getLogical();
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+    vkWaitForFences(device, 1, &m_computeInFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
+    vkResetFences(device, 1, &m_computeInFlightFences[currentFrame]);
+
+    m_computeCommandBufferArray.begin(currentFrame);
+    recordCommandBufferCompute(m_computeCommandBufferArray[currentFrame]);
+    m_computeCommandBufferArray.end(currentFrame);
+
+    float dt = ImGui::GetIO().DeltaTime;
+    m_deltaTimeUBO[currentFrame].map();
+    m_deltaTimeUBO[currentFrame].writeTo(&dt, sizeof(float));
+    m_deltaTimeUBO[currentFrame].unmap();
+
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &m_computeCommandBufferArray[currentFrame];
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = &m_computeFinishedSemaphores[currentFrame];
+
+    if (vkQueueSubmit(m_device.getComputeQueue(), 1, &submitInfo, m_computeInFlightFences[currentFrame]) != VK_SUCCESS)
+        LOG_ERROR("Failed to submit compute command buffer!");
+
     vkWaitForFences(device, 1, &m_inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
     uint32_t imageIndex;
@@ -351,12 +305,9 @@ void Renderer::render()
         ImGui::RenderPlatformWindowsDefault();
     }
 
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-    VkSemaphore waitSemaphores[] = { m_imageAvailableSemaphores[currentFrame] };
-    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-    submitInfo.waitSemaphoreCount = 1;
+    VkSemaphore waitSemaphores[] = { m_computeFinishedSemaphores[currentFrame], m_imageAvailableSemaphores[currentFrame] };
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    submitInfo.waitSemaphoreCount = 2;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;

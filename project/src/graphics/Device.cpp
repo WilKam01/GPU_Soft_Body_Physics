@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Device.h"
+#include "SwapChain.h"
 
 void Device::pickPhysicalDevice(Instance& instance)
 {
@@ -29,10 +30,11 @@ bool Device::isDeviceSuitable(VkPhysicalDevice device)
 	QueueFamilyIndices indices = findQueueFamilies(device);
 
 	bool extensionsSupported = checkDeviceExtensionSupport(device);
-	bool swapChainAdequate = true;
+	bool swapChainAdequate = false;
 	if (extensionsSupported)
 	{
-		//TODO: Check swapchain support
+		SwapChainSupportDetails swapChainSupport = SwapChain::querySupport(device, *p_surface);
+		swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
 	}
 
 	VkPhysicalDeviceFeatures supportedFeatures;
@@ -55,6 +57,8 @@ QueueFamilyIndices Device::findQueueFamilies(VkPhysicalDevice device)
 	{
 		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			indices.graphicsFamily = i;
+		if (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
+			indices.computeFamily = i;
 
 		VkBool32 presentSupport = false;
 		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, *p_surface, &presentSupport);
@@ -127,6 +131,7 @@ void Device::createLogicalDevice(Instance& instance)
 
 	vkGetDeviceQueue(m_device, m_indices.graphicsFamily.value(), 0, &m_graphicsQueue);
 	vkGetDeviceQueue(m_device, m_indices.presentFamily.value(), 0, &m_presentQueue);
+	vkGetDeviceQueue(m_device, m_indices.computeFamily.value(), 0, &m_computeQueue);
 }
 
 VkSampleCountFlagBits Device::getMaxUsableSampleCount()

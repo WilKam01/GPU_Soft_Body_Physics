@@ -211,8 +211,11 @@ void ImGuiRenderer::render()
     ImGui::Begin("Vertex data");
 
     ImGui::DragFloat3("pos_0", (float*)&vertices[0].position, 0.1f, -1.0f, 1.0f);
+    ImGui::DragFloat3("col_0", (float*)&vertices[0].color, 0.1f, -1.0f, 1.0f);
     ImGui::DragFloat3("pos_1", (float*)&vertices[1].position, 0.1f, -1.0f, 1.0f);
+    ImGui::DragFloat3("col_1", (float*)&vertices[1].color, 0.1f, -1.0f, 1.0f);
     ImGui::DragFloat3("pos_2", (float*)&vertices[2].position, 0.1f, -1.0f, 1.0f);
+    ImGui::DragFloat3("col_2", (float*)&vertices[2].color, 0.1f, -1.0f, 1.0f);
 
     ImGui::End();
 

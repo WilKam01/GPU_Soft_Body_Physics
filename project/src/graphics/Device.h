@@ -6,9 +6,10 @@ struct QueueFamilyIndices
 {
 	std::optional<uint32_t> graphicsFamily;
 	std::optional<uint32_t> presentFamily;
+	std::optional<uint32_t> computeFamily;
 
 	bool isComplete() {
-		return graphicsFamily.has_value() && presentFamily.has_value();
+		return graphicsFamily.has_value() && presentFamily.has_value() && computeFamily.has_value();
 	}
 };
 
@@ -22,6 +23,7 @@ private:
 	VkDevice m_device;
 	VkQueue m_graphicsQueue;
 	VkQueue m_presentQueue;
+	VkQueue m_computeQueue;
 
 	QueueFamilyIndices m_indices;
 
@@ -44,6 +46,7 @@ public:
 	inline VkPhysicalDevice getPhysical() { return m_physicalDevice; }
 	inline VkQueue getGraphicsQueue() { return m_graphicsQueue; }
 	inline VkQueue getPresentQueue() { return m_presentQueue; }
+	inline VkQueue getComputeQueue() { return m_computeQueue; }
 	inline QueueFamilyIndices getQueueFamilyIndices() { return m_indices; }
 	inline VkSampleCountFlagBits getMsaaSamples() { return m_msaaSamples; }
 };

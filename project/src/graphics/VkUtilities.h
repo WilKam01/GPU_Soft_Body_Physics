@@ -24,32 +24,6 @@ namespace VkUtils
         return imageView;
 	}
 
-    static VkShaderModule createShaderModule(VkDevice device, const std::string& filename)
-    {
-        std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-        if (!file.is_open())
-            LOG_ERROR("Failed to open file!");
-
-        size_t fileSize = (size_t)file.tellg();
-        std::vector<char> buffer(fileSize);
-
-        file.seekg(0);
-        file.read(buffer.data(), fileSize);
-        file.close();
-
-        VkShaderModuleCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        createInfo.codeSize = buffer.size();
-        createInfo.pCode = reinterpret_cast<const uint32_t*>(buffer.data());
-
-        VkShaderModule shaderModule;
-        if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
-            LOG_ERROR("Failed to create shader module!");
-
-        return shaderModule;
-    }
-
     static uint32_t findMemoryType(Device& device, uint32_t typeBits, VkMemoryPropertyFlags properties)
     {
         VkPhysicalDeviceMemoryProperties memProperties;

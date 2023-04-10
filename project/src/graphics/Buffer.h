@@ -34,6 +34,6 @@ public:
 	inline void* getMapped() { return m_mapped; }
 	inline VkDeviceMemory getMemory() { return m_memory; }
 	inline VkDeviceSize getSize() { return m_size; }
-
+	inline VkBufferUsageFlags getUsage() { return m_usageFlags; }
 };
 

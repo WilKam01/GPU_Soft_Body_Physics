@@ -6,13 +6,8 @@
 #include "CommandPool.h"
 #include "CommandBufferArray.h"
 #include "Buffer.h"
+#include "pipeline/Pipeline.h"
 #include "ImGuiRenderer.h"
-
-struct Vertex
-{
-	glm::vec3 position;
-	glm::vec3 color;
-};
 
 class Renderer
 {
@@ -26,13 +21,23 @@ private:
 	SwapChain m_swapChain;
 	VkSurfaceKHR m_surface;
 
-	VkPipelineLayout m_pipelineLayout;
-	VkPipeline m_graphicsPipeline;
+	PipelineLayout m_graphicsPipelineLayout;
+	Pipeline m_graphicsPipeline;
+
+	PipelineLayout m_computePipelineLayout;
+	Pipeline m_computePipeline;
+	DescriptorSetLayout m_computeDescriptorSetLayout;
+	DescriptorSet m_computeDescriptorSet;
+
 	VkViewport m_viewport;
 	VkRect2D m_scissor;
 
 	CommandPool m_commandPool;
 	CommandBufferArray m_commandBufferArray;
+	CommandPool m_computeCommandPool;
+	CommandBufferArray m_computeCommandBufferArray;
+
+	std::vector<Buffer> m_deltaTimeUBO;
 
 	Buffer m_vertexBuffer;
 	Buffer m_indexBuffer;
@@ -41,11 +46,13 @@ private:
 	std::vector<VkSemaphore> m_renderFinishedSemaphores;
 	std::vector<VkFence> m_inFlightFences;
 
+	std::vector<VkFence> m_computeInFlightFences;
+	std::vector<VkSemaphore> m_computeFinishedSemaphores;
+
 	ImGuiRenderer m_imGuiRenderer;
 
-	void createPipelineLayout();
-	void createGraphicsPipeline();
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+	void recordCommandBufferCompute(VkCommandBuffer commandBuffer);
 	void createSyncObjects();
 
 	void createMeshBuffers();

@@ -1,14 +1,16 @@
 #include "pch.h"
 #include "CommandPool.h"
 
-void CommandPool::init(Device& device)
+void CommandPool::init(Device& device, VkPipelineBindPoint bindPoint)
 {
     p_device = &device;
+    m_bindPoint = bindPoint;
 
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfo.queueFamilyIndex = device.getQueueFamilyIndices().graphicsFamily.value();
+    poolInfo.queueFamilyIndex = m_bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE ? 
+        device.getQueueFamilyIndices().computeFamily.value() : device.getQueueFamilyIndices().graphicsFamily.value();
 
     if (vkCreateCommandPool(device.getLogical(), &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS)
         LOG_ERROR("Failed to create command pool!");
@@ -47,8 +49,16 @@ void CommandPool::endSingleTimeCommand(VkCommandBuffer buffer)
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &buffer;
 
-    vkQueueSubmit(p_device->getGraphicsQueue(),1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(p_device->getGraphicsQueue());
+    if (m_bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE)
+    {
+        vkQueueSubmit(p_device->getComputeQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+        vkQueueWaitIdle(p_device->getComputeQueue());
+    }
+    else
+    {
+        vkQueueSubmit(p_device->getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+        vkQueueWaitIdle(p_device->getGraphicsQueue());
+    }
 
     vkFreeCommandBuffers(p_device->getLogical(), m_commandPool, 1, &buffer);
 }

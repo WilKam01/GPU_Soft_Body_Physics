@@ -6,10 +6,12 @@
 class CommandPool
 {
 private:
-	VkCommandPool m_commandPool;
 	Device* p_device;
+
+	VkCommandPool m_commandPool;
+	VkPipelineBindPoint m_bindPoint;
 public:
-	void init(Device& device);
+	void init(Device& device, VkPipelineBindPoint bindPoint);
 	void cleanup();
 
 	VkCommandBuffer beginSingleTimeCommand();
