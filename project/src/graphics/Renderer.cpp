@@ -1,7 +1,6 @@
 #include "pch.h"
 #include "Renderer.h"
 #include "core/Window.h"
-#include "VkUtilities.h"
 
 void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
@@ -12,23 +11,22 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     renderPassInfo.renderArea.offset = { 0, 0 };
     renderPassInfo.renderArea.extent = m_swapChain.getExtent();
 
-    VkClearValue clearColour { {0.0f, 0.0f, 0.0f, 1.0f} };
+    std::array<VkClearValue, 2> clearValues{};
+    clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+    clearValues[1].depthStencil = { 1.0f, 0 };
 
-    renderPassInfo.clearValueCount = 1;
-    renderPassInfo.pClearValues = &clearColour;
+    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    renderPassInfo.pClearValues = clearValues.data();
 
     vkCmdSetViewport(commandBuffer, 0, 1, &m_viewport);
     vkCmdSetScissor(commandBuffer, 0, 1, &m_scissor);
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipelineLayout.get(), 0, 1, &m_graphicsDescriptorSet.get(currentFrame), 0, 0);
 
-    VkBuffer vertexBuffers[] = { m_vertexBuffer.get() };
-    VkDeviceSize offsets[] = { 0 };
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer.get(), 0, VK_INDEX_TYPE_UINT32);
-
-    vkCmdDrawIndexed(commandBuffer, 3, 1, 0, 0, 0);
+    m_mesh.bind(commandBuffer);
+    vkCmdDrawIndexed(commandBuffer, m_mesh.getIndexCount(), 1, 0, 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
 
@@ -50,7 +48,7 @@ void Renderer::recordCommandBufferCompute(VkCommandBuffer commandBuffer)
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_computePipeline.get());
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_computePipelineLayout.get(), 0, 1, &m_computeDescriptorSet.get(currentFrame), 0, 0);
 
-    vkCmdDispatch(commandBuffer, 3, 1, 1);
+    vkCmdDispatch(commandBuffer, m_mesh.getVertexCount(), 1, 1);
 }
 
 void Renderer::createSyncObjects()
@@ -83,54 +81,40 @@ void Renderer::createSyncObjects()
 
 void Renderer::createMeshBuffers()
 {
-    static Vertex vertices[]
+    static std::vector<Vertex> vertices
     {
-        { glm::vec3(0.0f, 0.5f, 0.0f), 0.0f, glm::vec3(1.0f, 0.0f, 0.0f) },
-        { glm::vec3(0.5f, -0.5f, 0.0f), 0.0f, glm::vec3(0.0f, 1.0f, 0.0f) },
-        { glm::vec3(-0.5f, -0.5f, 0.0f), 0.0f, glm::vec3(0.0f, 0.0f, 1.0f) },
-        //{ glm::vec3(-0.5f, 0.5f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f) },
+        { glm::vec3(-1.0f, -1.0f, 1.0f), 0.0f, glm::vec3(0.25f) },
+        { glm::vec3(1.0f, -1.0f, 1.0f), 0.0f, glm::vec3(0.25f) },
+        { glm::vec3(-1.0f, 1.0f, 1.0f), 0.0f, glm::vec3(0.25f) },
+        { glm::vec3(1.0f, 1.0f, 1.0f), 0.0f, glm::vec3(0.25f) },
+        { glm::vec3(-1.0f, -1.0f, -1.0f), 0.0f, glm::vec3(1.0f) },
+        { glm::vec3(1.0f, -1.0f, -1.0f), 0.0f, glm::vec3(1.0f) },
+        { glm::vec3(-1.0f, 1.0f, -1.0f), 0.0f, glm::vec3(1.0f) },
+        { glm::vec3(1.0f, 1.0f, -1.0f), 0.0f, glm::vec3(1.0f) },
     };
 
-    static uint32_t indices[]{ 1, 0, 2 };
+    static std::vector<uint32_t> indices
+    {
+        0, 1, 3,
+        0, 3, 2,
 
-    // Vertex buffer
-    VkDeviceSize bufferSize = sizeof(vertices);
-    Buffer stagingBuffer;
-    stagingBuffer.init(m_device,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        bufferSize,
-        vertices
-    );
+        4, 7, 5,
+        4, 6, 7,
 
-    m_vertexBuffer.init(m_device,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-        bufferSize
-    );
+        0, 4, 5,
+        0, 5, 1,
 
-    m_commandPool.copyBuffer(stagingBuffer, m_vertexBuffer, bufferSize);
+        1, 5, 7,
+        1, 7, 3,
 
-    stagingBuffer.cleanup();
+        2, 7, 6,
+        2, 3, 7,
 
-    // Index buffer
-    bufferSize = sizeof(indices);
-    stagingBuffer.init(m_device,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        bufferSize,
-        indices
-    );
+        0, 2, 6,
+        0, 6, 4,
+    };
 
-    m_indexBuffer.init(m_device,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        bufferSize
-    );
-
-    m_commandPool.copyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
-
-    stagingBuffer.cleanup();
+    m_mesh.init(m_device, m_commandPool, vertices, indices);
 }
 
 void Renderer::recreateSwapChain()
@@ -147,6 +131,14 @@ void Renderer::recreateSwapChain()
     m_scissor.offset = { 0, 0 };
     m_scissor.extent = m_swapChain.getExtent();
 
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        Matrices& matrices = m_matricesUBO[i].get();
+        matrices.model = glm::mat4(1.0f);
+        matrices.viewProj = glm::perspective(glm::radians(45.0f), m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height, 0.1f, 10.0f);
+        matrices.viewProj *= glm::lookAt(glm::vec3(4.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    }
+
     m_imGuiRenderer.recreateFramebuffers();
 }
 
@@ -156,6 +148,12 @@ void Renderer::init(Window& window)
 	window.createSurface(m_instance.get(), m_surface);
 	m_device.init(m_instance, m_surface);
 	m_swapChain.init(m_device, m_surface, window);
+
+    currentFrame = 0;
+    Matrices matrices{};
+    matrices.model = glm::mat4(1.0f);
+    matrices.viewProj = glm::perspective(glm::radians(45.0f), m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height, 0.1f, 10.0f);
+    matrices.viewProj *= glm::lookAt(glm::vec3(4.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 
     m_viewport.x = 0.0f;
     m_viewport.y = (float)m_swapChain.getExtent().height;
@@ -167,8 +165,13 @@ void Renderer::init(Window& window)
     m_scissor.offset = { 0, 0 };
     m_scissor.extent = m_swapChain.getExtent();
 
-    m_graphicsPipelineLayout.init(m_device);
-    m_graphicsPipeline.initGraphics(m_device, m_graphicsPipelineLayout, nullptr, m_swapChain.getRenderPass(), "shaders/vert.spv", "shaders/frag.spv");
+    m_graphicsDescriptorSetLayout.init(m_device,
+    {
+        { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT },
+    });
+    m_graphicsDescriptorSet.init(m_device, m_graphicsDescriptorSetLayout, MAX_FRAMES_IN_FLIGHT);
+    m_graphicsPipelineLayout.init(m_device, &m_graphicsDescriptorSetLayout);
+    m_graphicsPipeline.initGraphics(m_device, m_graphicsPipelineLayout, &m_graphicsDescriptorSet, m_swapChain.getRenderPass(), "shaders/vert.spv", "shaders/frag.spv");
 
     m_computeDescriptorSetLayout.init(m_device,
     {
@@ -179,12 +182,12 @@ void Renderer::init(Window& window)
     m_computePipelineLayout.init(m_device, &m_computeDescriptorSetLayout);
     m_computePipeline.initCompute(m_device, m_computePipelineLayout, &m_computeDescriptorSet, "shaders/comp.spv");
 
-    VkDeviceSize bufferSize = sizeof(float);
-    float dt = 0.0f;
+    m_matricesUBO.resize(MAX_FRAMES_IN_FLIGHT);
     m_deltaTimeUBO.resize(MAX_FRAMES_IN_FLIGHT);
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        m_deltaTimeUBO[i].init(m_device, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, bufferSize, &dt);
+        m_matricesUBO[i].init(m_device, matrices);
+        m_deltaTimeUBO[i].init(m_device, 0.0f);
     }
 
     m_commandPool.init(m_device, VK_PIPELINE_BIND_POINT_GRAPHICS);
@@ -195,14 +198,15 @@ void Renderer::init(Window& window)
 
     createSyncObjects();
 
-    m_imGuiRenderer.init(window, m_instance, m_device, m_swapChain, m_commandPool, &m_vertexBuffer);
+    m_imGuiRenderer.init(window, m_instance, m_device, m_swapChain, m_commandPool, &m_mesh.getVertexBuffer());
 
     createMeshBuffers();
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        m_computeDescriptorSet.writeBuffer(i, 0, m_deltaTimeUBO[i], bufferSize);
-        m_computeDescriptorSet.writeBuffer(i, 1, m_vertexBuffer, m_vertexBuffer.getSize());
+        m_graphicsDescriptorSet.writeBuffer(i, 0, m_matricesUBO[i], m_matricesUBO[i].size());
+        m_computeDescriptorSet.writeBuffer(i, 0, m_deltaTimeUBO[i], m_deltaTimeUBO[i].size());
+        m_computeDescriptorSet.writeBuffer(i, 1, m_mesh.getVertexBuffer(), m_mesh.getVertexBuffer().getSize());
     }
 }
 
@@ -213,8 +217,7 @@ void Renderer::cleanup()
 
     m_imGuiRenderer.cleanup();
 
-    m_indexBuffer.cleanup();
-    m_vertexBuffer.cleanup();
+    m_mesh.cleanup();
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
     {
@@ -234,6 +237,7 @@ void Renderer::cleanup()
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
+        m_matricesUBO[i].cleanup();
         m_deltaTimeUBO[i].cleanup();
     }
 
@@ -245,6 +249,9 @@ void Renderer::cleanup()
 
     m_graphicsPipeline.cleanup();
     m_graphicsPipelineLayout.cleanup();
+
+    m_graphicsDescriptorSet.cleanup();
+    m_graphicsDescriptorSetLayout.cleanup();
 
 	m_swapChain.cleanup();
 	m_device.cleanup();
@@ -263,13 +270,11 @@ void Renderer::render()
     vkResetFences(device, 1, &m_computeInFlightFences[currentFrame]);
 
     m_computeCommandBufferArray.begin(currentFrame);
-    recordCommandBufferCompute(m_computeCommandBufferArray[currentFrame]);
+    //recordCommandBufferCompute(m_computeCommandBufferArray[currentFrame]);
     m_computeCommandBufferArray.end(currentFrame);
 
-    float dt = ImGui::GetIO().DeltaTime;
-    m_deltaTimeUBO[currentFrame].map();
-    m_deltaTimeUBO[currentFrame].writeTo(&dt, sizeof(float));
-    m_deltaTimeUBO[currentFrame].unmap();
+    m_deltaTimeUBO[currentFrame].get() = ImGui::GetIO().DeltaTime;
+    m_deltaTimeUBO[currentFrame].update();
 
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &m_computeCommandBufferArray[currentFrame];
@@ -297,6 +302,9 @@ void Renderer::render()
     m_commandBufferArray.begin(currentFrame);
     recordCommandBuffer(m_commandBufferArray[currentFrame], imageIndex);
     m_commandBufferArray.end(currentFrame);
+
+    m_matricesUBO[currentFrame].get().model = glm::rotate(glm::mat4(1.0f), (float)ImGui::GetTime() * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    m_matricesUBO[currentFrame].update();
 
     // Update and Render additional Platform Windows
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)

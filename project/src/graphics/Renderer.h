@@ -6,8 +6,16 @@
 #include "CommandPool.h"
 #include "CommandBufferArray.h"
 #include "Buffer.h"
+#include "Mesh.h"
+#include "pipeline/UniformBuffer.h"
 #include "pipeline/Pipeline.h"
 #include "ImGuiRenderer.h"
+
+struct Matrices 
+{
+	glm::mat4 model;
+	glm::mat4 viewProj;
+};
 
 class Renderer
 {
@@ -23,6 +31,8 @@ private:
 
 	PipelineLayout m_graphicsPipelineLayout;
 	Pipeline m_graphicsPipeline;
+	DescriptorSetLayout m_graphicsDescriptorSetLayout;
+	DescriptorSet m_graphicsDescriptorSet;
 
 	PipelineLayout m_computePipelineLayout;
 	Pipeline m_computePipeline;
@@ -37,10 +47,10 @@ private:
 	CommandPool m_computeCommandPool;
 	CommandBufferArray m_computeCommandBufferArray;
 
-	std::vector<Buffer> m_deltaTimeUBO;
+	std::vector<UniformBuffer<Matrices>> m_matricesUBO;
+	std::vector<UniformBuffer<float>> m_deltaTimeUBO;
 
-	Buffer m_vertexBuffer;
-	Buffer m_indexBuffer;
+	Mesh m_mesh;
 
 	std::vector<VkSemaphore> m_imageAvailableSemaphores;
 	std::vector<VkSemaphore> m_renderFinishedSemaphores;

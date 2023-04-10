@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Device.h"
+#include "Texture.h"
 
 struct SwapChainSupportDetails {
 	VkSurfaceCapabilitiesKHR capabilities;
@@ -15,6 +16,7 @@ private:
 	std::vector<VkImage> m_images;
 	std::vector<VkImageView> m_imageViews;
 	std::vector<VkFramebuffer> m_framebuffers;
+	Texture m_depthTexture;
 	VkFormat m_imageFormat;
 	VkExtent2D m_extent;
 	VkRenderPass m_renderPass;

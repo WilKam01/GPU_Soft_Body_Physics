@@ -42,6 +42,8 @@ public:
 	void cleanup();
 
 	void waitIdle();
+	uint32_t findMemoryType(uint32_t typeBits, VkMemoryPropertyFlags properties);
+
 	inline VkDevice getLogical() { return m_device; }
 	inline VkPhysicalDevice getPhysical() { return m_physicalDevice; }
 	inline VkQueue getGraphicsQueue() { return m_graphicsQueue; }

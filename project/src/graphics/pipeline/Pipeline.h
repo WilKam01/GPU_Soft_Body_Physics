@@ -1,14 +1,7 @@
 #pragma once
 
 #include "Descriptors.h"
-
-struct Vertex
-{
-	glm::vec3 position;
-	float pad0;
-	glm::vec3 color;
-	float pad1;
-};
+#include "../Mesh.h"
 
 class PipelineLayout
 {

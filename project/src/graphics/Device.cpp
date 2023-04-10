@@ -166,3 +166,17 @@ void Device::waitIdle()
 {
 	vkDeviceWaitIdle(m_device);
 }
+
+uint32_t Device::findMemoryType(uint32_t typeBits, VkMemoryPropertyFlags properties)
+{
+	VkPhysicalDeviceMemoryProperties memProperties;
+	vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
+
+	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+	{
+		if (typeBits & (1 << i) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+			return i;
+	}
+
+	LOG_ERROR("Failed to find suitable memory type!");
+}

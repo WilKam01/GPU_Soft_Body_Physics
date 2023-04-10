@@ -204,7 +204,7 @@ void ImGuiRenderer::render()
 
     //------------------------------------------
 
-    static Vertex vertices[3];
+    /*static Vertex vertices[3];
     p_vertexBuffer->map();
     memcpy(vertices, p_vertexBuffer->getMapped(), sizeof(Vertex) * 3);
 
@@ -220,7 +220,7 @@ void ImGuiRenderer::render()
     ImGui::End();
 
     p_vertexBuffer->writeTo(vertices, sizeof(Vertex) * 3);
-    p_vertexBuffer->unmap();
+    p_vertexBuffer->unmap();*/
 
     //------------------------------------------
 

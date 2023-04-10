@@ -1,6 +1,5 @@
 #include "pch.h"
 #include "Buffer.h"
-#include "VkUtilities.h"
 #include <assert.h>
 
 void Buffer::init(
@@ -29,7 +28,7 @@ void Buffer::init(
 	VkMemoryAllocateInfo memAlloc{};
 	memAlloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memAlloc.allocationSize = memReqs.size;
-	memAlloc.memoryTypeIndex = VkUtils::findMemoryType(device, memReqs.memoryTypeBits, memoryPropertyFlags);
+	memAlloc.memoryTypeIndex = p_device->findMemoryType(memReqs.memoryTypeBits, memoryPropertyFlags);
 
 	VkMemoryAllocateFlagsInfoKHR allocFlagsInfo{};
 	if (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) {
