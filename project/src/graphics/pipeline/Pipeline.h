@@ -3,6 +3,13 @@
 #include "Descriptors.h"
 #include "../Mesh.h"
 
+struct PipelineSettings
+{
+	bool wireframe;
+	bool backfaceCulling;
+	bool depthTesting;
+};
+
 class PipelineLayout
 {
 private:
@@ -34,7 +41,8 @@ public:
 		DescriptorSet* descriptorSet,
 		VkRenderPass renderPass,
 		const std::string& vertexShaderPath,
-		const std::string& fragmentShaderPath
+		const std::string& fragmentShaderPath,
+		PipelineSettings settings
 	);
 	void initCompute(
 		Device& device,

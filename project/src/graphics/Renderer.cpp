@@ -171,7 +171,15 @@ void Renderer::init(Window& window)
     });
     m_graphicsDescriptorSet.init(m_device, m_graphicsDescriptorSetLayout, MAX_FRAMES_IN_FLIGHT);
     m_graphicsPipelineLayout.init(m_device, &m_graphicsDescriptorSetLayout);
-    m_graphicsPipeline.initGraphics(m_device, m_graphicsPipelineLayout, &m_graphicsDescriptorSet, m_swapChain.getRenderPass(), "shaders/vert.spv", "shaders/frag.spv");
+    m_graphicsPipeline.initGraphics(
+        m_device, 
+        m_graphicsPipelineLayout, 
+        &m_graphicsDescriptorSet, 
+        m_swapChain.getRenderPass(), 
+        "shaders/vert.spv", 
+        "shaders/frag.spv",
+        { true, false, false }
+    );
 
     m_computeDescriptorSetLayout.init(m_device,
     {
