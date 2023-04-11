@@ -62,7 +62,7 @@ void SwapChain::create()
     createInfo.imageColorSpace = surfaceFormat.colorSpace;
     createInfo.imageExtent = extent;
     createInfo.imageArrayLayers = 1;
-    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     QueueFamilyIndices indices = p_device->getQueueFamilyIndices();
     uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
@@ -257,7 +257,127 @@ const bool SwapChain::needsRecreation()
     return p_window->isMinimized();
 }
 
-const SwapChainSupportDetails SwapChain::querySupport(VkPhysicalDevice device, VkSurfaceKHR surface)
+const Texture SwapChain::copyImage(size_t i, CommandPool& commandPool)
+{
+    Texture texture;
+    texture.init(*p_device, glm::ivec2(m_extent.width, m_extent.height), 
+        VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    VkImage srcImage = m_images[i];
+
+    texture.transistionImageLayout(
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_ACCESS_NONE,
+        VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        commandPool
+    );
+    Texture::transistionImageLayout(
+        srcImage,
+        m_imageFormat,
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_ACCESS_MEMORY_READ_BIT,
+        VK_ACCESS_TRANSFER_READ_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        commandPool
+    );
+
+    VkCommandBuffer commandBuffer = commandPool.beginSingleTimeCommand();
+    bool supportBlit = p_device->supportBlit(m_imageFormat, VK_FORMAT_R8G8B8A8_UNORM);
+
+    if (supportBlit)
+    {
+        VkOffset3D blitSize;
+        blitSize.x = m_extent.width;
+        blitSize.y = m_extent.height;
+        blitSize.z = 1;
+        VkImageBlit imageBlitRegion{};
+        imageBlitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageBlitRegion.srcSubresource.layerCount = 1;
+        imageBlitRegion.srcOffsets[1] = blitSize;
+        imageBlitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageBlitRegion.dstSubresource.layerCount = 1;
+        imageBlitRegion.dstOffsets[1] = blitSize;
+
+        vkCmdBlitImage(
+            commandBuffer,
+            srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            texture.getImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &imageBlitRegion,
+            VK_FILTER_NEAREST
+        );
+    }
+    else
+    {
+        VkImageCopy imageCopyRegion{};
+        imageCopyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageCopyRegion.srcSubresource.layerCount = 1;
+        imageCopyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageCopyRegion.dstSubresource.layerCount = 1;
+        imageCopyRegion.extent.width = m_extent.width;
+        imageCopyRegion.extent.height = m_extent.height;
+        imageCopyRegion.extent.depth = 1;
+
+        vkCmdCopyImage(
+            commandBuffer,
+            srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            texture.getImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &imageCopyRegion
+        );
+    }
+
+    commandPool.endSingleTimeCommand(commandBuffer);
+
+    texture.transistionImageLayout(
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_ACCESS_MEMORY_READ_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        commandPool
+    );
+    Texture::transistionImageLayout(
+        srcImage,
+        m_imageFormat,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        VK_ACCESS_TRANSFER_READ_BIT,
+        VK_ACCESS_MEMORY_READ_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        commandPool
+    );
+
+    // Convert from BGRA to RGBA
+    if (!supportBlit)
+    {
+        glm::ivec2 dimensions = texture.getDimensions();
+        char* data;
+        vkMapMemory(p_device->getLogical(), texture.getMemory(), 0, VK_WHOLE_SIZE, 0, (void**)&data);
+
+        for (int y = 0; y < dimensions.y; y++)
+        {
+            for (int x = 0; x < dimensions.x; x++)
+            {
+                int index = (y * dimensions.x + x) * 4;
+                std::swap(data[index], data[index + 2]);
+            }
+        }
+
+        vkUnmapMemory(p_device->getLogical(), texture.getMemory());
+    }
+
+    return texture;
+}
+
+SwapChainSupportDetails SwapChain::querySupport(VkPhysicalDevice device, VkSurfaceKHR surface)
 {
     SwapChainSupportDetails details;
 

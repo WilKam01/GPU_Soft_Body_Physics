@@ -39,7 +39,9 @@ public:
 	void recreate();
 	const bool needsRecreation(); const
 
+	Texture copyImage(size_t i, CommandPool& commandPool);
 	static SwapChainSupportDetails querySupport(VkPhysicalDevice device, VkSurfaceKHR surface);
+
 	inline VkSwapchainKHR get() { return m_swapChain; }
 	inline VkFormat getFormat() { return m_imageFormat; }
 	inline VkExtent2D getExtent() { return m_extent; }

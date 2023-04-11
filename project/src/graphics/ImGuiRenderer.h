@@ -9,6 +9,7 @@ class ImGuiRenderer
 private:
 	Device* p_device;
 	SwapChain* p_swapChain;
+	CommandPool* p_commandPool;
 	Buffer* p_vertexBuffer;
 
 	VkRenderPass m_renderPass;
@@ -22,7 +23,7 @@ public:
 	void cleanup();
 	void recreateFramebuffers();
 
-	void render();
+	void render(uint32_t currentFrame);
 
 	inline VkRenderPass getRenderPass() { return m_renderPass; }
 	inline VkFramebuffer getFramebuffer(size_t i) { return m_framebuffers[i]; }

@@ -43,6 +43,7 @@ public:
 
 	void waitIdle();
 	uint32_t findMemoryType(uint32_t typeBits, VkMemoryPropertyFlags properties);
+	bool supportBlit(VkFormat src, VkFormat dst) const;
 
 	inline VkDevice getLogical() { return m_device; }
 	inline VkPhysicalDevice getPhysical() { return m_physicalDevice; }

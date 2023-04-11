@@ -10,3 +10,6 @@
 	url = https://github.com/ocornut/imgui.git
 	branch = docking
 	ignore = dirty
+[submodule "external/stb"]
+	path = external/stb
+	url = https://github.com/nothings/stb.git

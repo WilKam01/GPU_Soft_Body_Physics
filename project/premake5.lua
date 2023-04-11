@@ -23,6 +23,7 @@ project "project"
 	    "%{includeDir.glfw}",
 	    "%{includeDir.glm}",
 	    "%{includeDir.imgui}",
+	    "%{includeDir.stb}",
 	    "%{includeDir.vulkanSDK}"
     }
 

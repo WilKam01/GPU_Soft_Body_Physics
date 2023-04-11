@@ -181,3 +181,25 @@ uint32_t Device::findMemoryType(uint32_t typeBits, VkMemoryPropertyFlags propert
 
 	LOG_ERROR("Failed to find suitable memory type!");
 }
+
+bool Device::supportBlit(VkFormat src, VkFormat dst) const
+{
+	bool blitSupport = true;
+
+	VkFormatProperties formatProps;
+	vkGetPhysicalDeviceFormatProperties(m_physicalDevice, src, &formatProps);
+	if (!(formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT))
+	{
+		LOG_WARNING("Device does not support blitting from optimal tiled images, using copy instead of blit!");
+		blitSupport = false;
+	}
+
+	vkGetPhysicalDeviceFormatProperties(m_physicalDevice, dst, &formatProps);
+	if (!(formatProps.linearTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT))
+	{
+		LOG_WARNING("Device does not support blitting to linear tiled images, using copy instead of blit!");
+		blitSupport = false;
+	}
+
+	return blitSupport;
+}

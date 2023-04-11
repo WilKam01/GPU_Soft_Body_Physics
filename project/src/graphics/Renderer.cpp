@@ -30,7 +30,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 
     vkCmdEndRenderPass(commandBuffer);
 
-    m_imGuiRenderer.render();
+    m_imGuiRenderer.render(currentFrame);
 
     renderPassInfo.renderPass = m_imGuiRenderer.getRenderPass();
     renderPassInfo.framebuffer = m_imGuiRenderer.getFramebuffer(imageIndex);
@@ -178,7 +178,7 @@ void Renderer::init(Window& window)
         m_swapChain.getRenderPass(), 
         "shaders/vert.spv", 
         "shaders/frag.spv",
-        { true, false, false }
+        { false, true, true }
     );
 
     m_computeDescriptorSetLayout.init(m_device,

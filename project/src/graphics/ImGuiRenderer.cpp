@@ -86,6 +86,7 @@ void ImGuiRenderer::init(Window& window, Instance& instance, Device& device, Swa
 {
     p_device = &device;
     p_swapChain = &swapChain;
+    p_commandPool = &commandPool;
     p_vertexBuffer = vertexBuffer;
 
     createRenderPass();
@@ -196,7 +197,7 @@ void ImGuiRenderer::recreateFramebuffers()
     createFramebuffers();
 }
 
-void ImGuiRenderer::render()
+void ImGuiRenderer::render(uint32_t currentFrame)
 {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -221,6 +222,17 @@ void ImGuiRenderer::render()
 
     p_vertexBuffer->writeTo(vertices, sizeof(Vertex) * 3);
     p_vertexBuffer->unmap();*/
+
+    ImGui::Begin("Copy image");
+
+    if (ImGui::Button("Copy!"))
+    {
+        Texture texture = p_swapChain->copyImage(currentFrame, *p_commandPool);
+        texture.exportJPG("../screenshot.jpg");
+        texture.cleanup();
+    }
+
+    ImGui::End();
 
     //------------------------------------------
 
