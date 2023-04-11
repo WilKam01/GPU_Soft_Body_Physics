@@ -79,18 +79,18 @@ void Renderer::createSyncObjects()
     }
 }
 
-void Renderer::createMeshBuffers()
+void Renderer::createResources()
 {
     static std::vector<Vertex> vertices
     {
-        { glm::vec3(-1.0f, -1.0f, 1.0f), 0.0f, glm::vec3(0.25f) },
-        { glm::vec3(1.0f, -1.0f, 1.0f), 0.0f, glm::vec3(0.25f) },
-        { glm::vec3(-1.0f, 1.0f, 1.0f), 0.0f, glm::vec3(0.25f) },
-        { glm::vec3(1.0f, 1.0f, 1.0f), 0.0f, glm::vec3(0.25f) },
-        { glm::vec3(-1.0f, -1.0f, -1.0f), 0.0f, glm::vec3(1.0f) },
-        { glm::vec3(1.0f, -1.0f, -1.0f), 0.0f, glm::vec3(1.0f) },
-        { glm::vec3(-1.0f, 1.0f, -1.0f), 0.0f, glm::vec3(1.0f) },
-        { glm::vec3(1.0f, 1.0f, -1.0f), 0.0f, glm::vec3(1.0f) },
+        { glm::vec3(-1.0f, -1.0f, 1.0f), glm::vec2(0.0f, 0.0f) },
+        { glm::vec3(1.0f, -1.0f, 1.0f), glm::vec2(1.0f, 0.0f) },
+        { glm::vec3(-1.0f, 1.0f, 1.0f), glm::vec2(0.0f, 1.0f) },
+        { glm::vec3(1.0f, 1.0f, 1.0f), glm::vec2(1.0f, 1.0f) },
+        { glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec2(0.0f, 0.0f) },
+        { glm::vec3(1.0f, -1.0f, -1.0f), glm::vec2(1.0f, 0.0f) },
+        { glm::vec3(-1.0f, 1.0f, -1.0f), glm::vec2(0.0f, 1.0f) },
+        { glm::vec3(1.0f, 1.0f, -1.0f), glm::vec2(1.0f, 1.0f) },
     };
 
     static std::vector<uint32_t> indices
@@ -115,6 +115,27 @@ void Renderer::createMeshBuffers()
     };
 
     m_mesh.init(m_device, m_commandPool, vertices, indices);
+    m_texture.init(m_device, m_commandPool, "textures/white.jpg");
+    m_sampler.init(m_device);
+
+    static float scale = 100.0f;
+    static float uvScale = 10.0f;
+    static std::vector<Vertex> floorVertices
+    {
+        { glm::vec3(-1.0f, -1.0f, 0.0f) * scale, glm::vec2(0.0f, 0.0f) * uvScale },
+        { glm::vec3(1.0f, -1.0f, 0.0f) * scale, glm::vec2(1.0f, 0.0f) * uvScale },
+        { glm::vec3(-1.0f, 1.0f, 0.0f) * scale, glm::vec2(0.0f, 1.0f) * uvScale },
+        { glm::vec3(1.0f, 1.0f, 0.0f) * scale, glm::vec2(1.0f, 1.0f) * uvScale },
+    };
+
+    static std::vector<uint32_t> floorIndices
+    {
+        0, 1, 3,
+        0, 3, 2,
+    };
+
+    m_floorMesh.init(m_device, m_commandPool, floorVertices, floorIndices);
+    m_floorTexture.init(m_device, m_commandPool, "textures/check.jpg");
 }
 
 void Renderer::recreateSwapChain()
@@ -168,6 +189,7 @@ void Renderer::init(Window& window)
     m_graphicsDescriptorSetLayout.init(m_device,
     {
         { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT },
+        { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT }
     });
     m_graphicsDescriptorSet.init(m_device, m_graphicsDescriptorSetLayout, MAX_FRAMES_IN_FLIGHT);
     m_graphicsPipelineLayout.init(m_device, &m_graphicsDescriptorSetLayout);
@@ -208,11 +230,13 @@ void Renderer::init(Window& window)
 
     m_imGuiRenderer.init(window, m_instance, m_device, m_swapChain, m_commandPool, &m_mesh.getVertexBuffer());
 
-    createMeshBuffers();
+    createResources();
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         m_graphicsDescriptorSet.writeBuffer(i, 0, m_matricesUBO[i], m_matricesUBO[i].size());
+        m_graphicsDescriptorSet.writeTexture(i, 1, m_texture, m_sampler);
+
         m_computeDescriptorSet.writeBuffer(i, 0, m_deltaTimeUBO[i], m_deltaTimeUBO[i].size());
         m_computeDescriptorSet.writeBuffer(i, 1, m_mesh.getVertexBuffer(), m_mesh.getVertexBuffer().getSize());
     }
@@ -225,6 +249,11 @@ void Renderer::cleanup()
 
     m_imGuiRenderer.cleanup();
 
+    m_floorTexture.cleanup();
+    m_floorMesh.cleanup();
+
+    m_sampler.cleanup();
+    m_texture.cleanup();
     m_mesh.cleanup();
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 

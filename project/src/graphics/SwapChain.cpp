@@ -213,7 +213,7 @@ void SwapChain::init(Device& device, VkSurfaceKHR surface, Window& window)
 
     create();
     createImageViews();
-    m_depthTexture.initDepth(device, glm::ivec2(m_extent.width, m_extent.height));
+    m_depthTexture.initDepth(device, glm::uvec2(m_extent.width, m_extent.height));
     createRenderPass();
     createFramebuffers();
 }
@@ -247,7 +247,7 @@ void SwapChain::recreate()
 
     create();
     createImageViews();
-    m_depthTexture.initDepth(*p_device, glm::ivec2(m_extent.width, m_extent.height));
+    m_depthTexture.initDepth(*p_device, glm::uvec2(m_extent.width, m_extent.height));
     createRenderPass();
     createFramebuffers();
 }
@@ -260,7 +260,7 @@ const bool SwapChain::needsRecreation()
 const Texture SwapChain::copyImage(size_t i, CommandPool& commandPool)
 {
     Texture texture;
-    texture.init(*p_device, glm::ivec2(m_extent.width, m_extent.height), 
+    texture.initEmpty(*p_device, glm::uvec2(m_extent.width, m_extent.height), 
         VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
     VkImage srcImage = m_images[i];
@@ -358,13 +358,13 @@ const Texture SwapChain::copyImage(size_t i, CommandPool& commandPool)
     // Convert from BGRA to RGBA
     if (!supportBlit)
     {
-        glm::ivec2 dimensions = texture.getDimensions();
+        glm::uvec2 dimensions = texture.getDimensions();
         char* data;
         vkMapMemory(p_device->getLogical(), texture.getMemory(), 0, VK_WHOLE_SIZE, 0, (void**)&data);
 
-        for (int y = 0; y < dimensions.y; y++)
+        for (unsigned int y = 0; y < dimensions.y; y++)
         {
-            for (int x = 0; x < dimensions.x; x++)
+            for (unsigned int x = 0; x < dimensions.x; x++)
             {
                 int index = (y * dimensions.x + x) * 4;
                 std::swap(data[index], data[index + 2]);

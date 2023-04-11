@@ -1,10 +1,11 @@
 #include "pch.h"
 #include "Texture.h"
+#include "CommandPool.h"
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#include <stb_image.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include <stb_image_write.h>
 
 VkFormat Texture::findDepthFormat()
 {
@@ -60,6 +61,100 @@ void Texture::createImage(VkImageTiling tiling, VkImageUsageFlags usage, VkMemor
     vkBindImageMemory(p_device->getLogical(), m_image, m_memory, 0);
 }
 
+void Texture::init(
+    Device& device,
+    CommandPool& commandPool,
+    const std::string& path
+)
+{
+    p_device = &device;
+    m_dimensions = glm::uvec2(0, 0);
+    m_format = VK_FORMAT_R8G8B8A8_UNORM;
+    m_hasImageView = false;
+
+    int channels = 0;
+    stbi_uc* data = stbi_load(path.c_str(), (int*)&m_dimensions.x, (int*)&m_dimensions.y, &channels, STBI_rgb_alpha);
+    if (!data)
+    {
+        LOG_WARNING("Failed to load texture with image path: " + path);
+        return;
+    }
+
+    VkDeviceSize size = m_dimensions.x * m_dimensions.y * 4;
+
+    Buffer stagingBuffer;
+    stagingBuffer.init(device, 
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        size,
+        data
+    );
+    stbi_image_free(data);
+
+    createImage(VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    transistionImageLayout(
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_ACCESS_NONE,
+        VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        commandPool
+    );
+
+    commandPool.copyBufferToImage(stagingBuffer, *this);
+
+    transistionImageLayout(
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_ACCESS_SHADER_READ_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        commandPool
+    );
+
+    stagingBuffer.cleanup();
+
+    createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
+}
+
+void Texture::initEmpty(
+    Device& device,
+    glm::uvec2 dimensions,
+    VkImageTiling tiling,
+    VkImageUsageFlags usage, 
+    VkMemoryPropertyFlags properties
+)
+{
+    p_device = &device;
+    m_dimensions = dimensions;
+    m_format = VK_FORMAT_R8G8B8A8_UNORM;
+    m_hasImageView = false;
+
+    createImage(tiling, usage, properties);
+}
+
+void Texture::initDepth(Device& device, glm::uvec2 dimensions)
+{
+    p_device = &device;
+    m_dimensions = dimensions;
+    m_format = findDepthFormat();
+    m_hasImageView = false;
+
+    createImage(VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    createImageView(VK_IMAGE_ASPECT_DEPTH_BIT);
+}
+
+void Texture::cleanup()
+{
+    if(m_hasImageView)
+        vkDestroyImageView(p_device->getLogical(), m_imageView, nullptr);
+    vkDestroyImage(p_device->getLogical(), m_image, nullptr);
+    vkFreeMemory(p_device->getLogical(), m_memory, nullptr);
+}
+
 void Texture::createImageView(VkImageAspectFlags aspectFlags)
 {
     VkImageViewCreateInfo viewInfo{};
@@ -77,48 +172,6 @@ void Texture::createImageView(VkImageAspectFlags aspectFlags)
         LOG_ERROR("Failed to create image view!");
 
     m_hasImageView = true;
-}
-
-void Texture::init(
-    Device& device,
-    glm::ivec2 dimensions,
-    VkImageTiling tiling,
-    VkImageUsageFlags usage, 
-    VkMemoryPropertyFlags properties,
-    void* data
-)
-{
-    p_device = &device;
-    m_dimensions = dimensions;
-    m_format = VK_FORMAT_R8G8B8A8_UNORM;
-    m_hasImageView = false;
-
-    if (!data)
-    {
-        createImage(tiling, usage, properties);
-        return;
-    }
-
-    //TODO: add support to create with initial texture data
-}
-
-void Texture::initDepth(Device& device, glm::ivec2 dimensions)
-{
-    p_device = &device;
-    m_dimensions = dimensions;
-    m_format = findDepthFormat();
-    m_hasImageView = false;
-
-    createImage(VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    createImageView(VK_IMAGE_ASPECT_DEPTH_BIT);
-}
-
-void Texture::cleanup()
-{
-    if(m_hasImageView)
-        vkDestroyImageView(p_device->getLogical(), m_imageView, nullptr);
-    vkDestroyImage(p_device->getLogical(), m_image, nullptr);
-    vkFreeMemory(p_device->getLogical(), m_memory, nullptr);
 }
 
 void Texture::transistionImageLayout(

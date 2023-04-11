@@ -7,8 +7,9 @@
 #include "CommandBufferArray.h"
 #include "Buffer.h"
 #include "Mesh.h"
-#include "pipeline/UniformBuffer.h"
 #include "pipeline/Pipeline.h"
+#include "pipeline/UniformBuffer.h"
+#include "pipeline/Sampler.h"
 #include "ImGuiRenderer.h"
 
 struct Matrices 
@@ -39,6 +40,13 @@ private:
 	DescriptorSetLayout m_computeDescriptorSetLayout;
 	DescriptorSet m_computeDescriptorSet;
 
+	Texture m_texture;
+	Sampler m_sampler;
+	Mesh m_mesh;
+
+	Texture m_floorTexture;
+	Mesh m_floorMesh;
+
 	VkViewport m_viewport;
 	VkRect2D m_scissor;
 
@@ -50,7 +58,6 @@ private:
 	std::vector<UniformBuffer<Matrices>> m_matricesUBO;
 	std::vector<UniformBuffer<float>> m_deltaTimeUBO;
 
-	Mesh m_mesh;
 
 	std::vector<VkSemaphore> m_imageAvailableSemaphores;
 	std::vector<VkSemaphore> m_renderFinishedSemaphores;
@@ -65,7 +72,7 @@ private:
 	void recordCommandBufferCompute(VkCommandBuffer commandBuffer);
 	void createSyncObjects();
 
-	void createMeshBuffers();
+	void createResources();
 
 	void recreateSwapChain();
 public:

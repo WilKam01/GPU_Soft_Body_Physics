@@ -2,6 +2,8 @@
 
 #include "../Device.h"
 #include "../Buffer.h"
+#include "../Texture.h"
+#include "Sampler.h"
 
 struct ShaderBinding
 {
@@ -47,6 +49,7 @@ public:
 	void cleanup();
 
 	void writeBuffer(size_t i, uint32_t binding, Buffer& buffer, VkDeviceSize range, VkDeviceSize offset = 0);
+	void writeTexture(size_t i, uint32_t binding, Texture& texture, Sampler& sampler);
 
 	VkDescriptorSet& get(size_t i) { return m_descriptorSet[i]; }
 };

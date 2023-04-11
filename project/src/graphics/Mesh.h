@@ -6,9 +6,7 @@
 struct Vertex
 {
 	glm::vec3 position;
-	float pad0;
-	glm::vec3 color;
-	float pad1;
+	glm::vec2 uv;
 };
 
 class Mesh

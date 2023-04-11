@@ -104,7 +104,6 @@ void DescriptorSet::writeBuffer(size_t i, uint32_t binding, Buffer& buffer, VkDe
     bufferInfo.range = range;
 
     VkWriteDescriptorSet descriptorWrites{};
-
     descriptorWrites.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     descriptorWrites.dstSet = m_descriptorSet[i];
     descriptorWrites.dstBinding = binding;
@@ -112,6 +111,25 @@ void DescriptorSet::writeBuffer(size_t i, uint32_t binding, Buffer& buffer, VkDe
     descriptorWrites.descriptorType = p_layout->getBinding(binding).type;
     descriptorWrites.descriptorCount = 1;
     descriptorWrites.pBufferInfo = &bufferInfo;
+
+    vkUpdateDescriptorSets(p_device->getLogical(), 1, &descriptorWrites, 0, nullptr);
+}
+
+void DescriptorSet::writeTexture(size_t i, uint32_t binding, Texture& texture, Sampler& sampler)
+{
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfo.imageView = texture.getView();
+    imageInfo.sampler = sampler.get();
+
+    VkWriteDescriptorSet descriptorWrites{};
+    descriptorWrites.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrites.dstSet = m_descriptorSet[i];
+    descriptorWrites.dstBinding = binding;
+    descriptorWrites.dstArrayElement = 0;
+    descriptorWrites.descriptorType = p_layout->getBinding(binding).type;
+    descriptorWrites.descriptorCount = 1;
+    descriptorWrites.pImageInfo = &imageInfo;
 
     vkUpdateDescriptorSets(p_device->getLogical(), 1, &descriptorWrites, 0, nullptr);
 }

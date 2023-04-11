@@ -1,7 +1,8 @@
 #pragma once
 
 #include "Device.h"
-#include "CommandPool.h"
+
+class CommandPool;
 
 class Texture
 {
@@ -12,27 +13,31 @@ private:
 	VkImageView m_imageView;
 	VkDeviceMemory m_memory;
 	VkFormat m_format;
-	glm::ivec2 m_dimensions;
+	glm::uvec2 m_dimensions;
 
 	bool m_hasImageView;
 
 	VkFormat findDepthFormat();
 
 	void createImage(VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties);
-	void createImageView(VkImageAspectFlags aspectFlags);
 public:
 
 	void init(
+		Device& device,
+		CommandPool& commandPool,
+		const std::string& path
+	);
+	void initEmpty(
 		Device& device, 
-		glm::ivec2 dimensions, 
+		glm::uvec2 dimensions, 
 		VkImageTiling tiling,
 		VkImageUsageFlags usage, 
-		VkMemoryPropertyFlags properties,
-		void* data = nullptr
+		VkMemoryPropertyFlags properties
 	);
-	void initDepth(Device& device, glm::ivec2 dimensions);
+	void initDepth(Device& device, glm::uvec2 dimensions);
 	void cleanup();
 
+	void createImageView(VkImageAspectFlags aspectFlags);
 	void transistionImageLayout(
 		VkImageLayout oldLayout,
 		VkImageLayout newLayout,
@@ -60,6 +65,6 @@ public:
 	inline VkImageView getView() { return m_imageView; }
 	inline VkDeviceMemory getMemory() { return m_memory; }
 	inline VkFormat getFormat() { return m_format; }
-	inline glm::ivec2 getDimensions() { return m_dimensions; }
+	inline glm::uvec2 getDimensions() { return m_dimensions; }
 };
 

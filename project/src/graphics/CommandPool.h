@@ -2,6 +2,7 @@
 
 #include "Device.h"
 #include "Buffer.h"
+#include "Texture.h"
 
 class CommandPool
 {
@@ -16,7 +17,9 @@ public:
 
 	VkCommandBuffer beginSingleTimeCommand();
 	void endSingleTimeCommand(VkCommandBuffer buffer);
+
 	void copyBuffer(Buffer& src, Buffer& dst, VkDeviceSize size);
+	void copyBufferToImage(Buffer& src, Texture& dst);
 
 	inline VkCommandPool get() { return m_commandPool; }
 };

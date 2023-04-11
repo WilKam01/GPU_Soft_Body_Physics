@@ -6,7 +6,7 @@ template <typename T>
 class UniformBuffer : public Buffer
 {
 private:
-	T m_data;
+	T m_data{};
 public:
 	void init(Device& device, T data);
 	void update();
