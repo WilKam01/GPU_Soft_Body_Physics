@@ -23,10 +23,14 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipelineLayout.get(), 0, 1, &m_graphicsDescriptorSet.get(currentFrame), 0, 0);
 
+    m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_meshDescriptorSet.get(0)});
     m_mesh.bind(commandBuffer);
     vkCmdDrawIndexed(commandBuffer, m_mesh.getIndexCount(), 1, 0, 0, 0);
+
+    m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_floorDescriptorSet.get(0) });
+    m_floorMesh.bind(commandBuffer);
+    vkCmdDrawIndexed(commandBuffer, m_floorMesh.getIndexCount(), 1, 0, 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
 
@@ -156,8 +160,8 @@ void Renderer::recreateSwapChain()
     {
         Matrices& matrices = m_matricesUBO[i].get();
         matrices.model = glm::mat4(1.0f);
-        matrices.viewProj = glm::perspective(glm::radians(45.0f), m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height, 0.1f, 10.0f);
-        matrices.viewProj *= glm::lookAt(glm::vec3(4.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        matrices.viewProj = glm::perspective(glm::radians(45.0f), m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height, 0.1f, 100.0f);
+        matrices.viewProj *= glm::lookAt(glm::vec3(10.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     }
 
     m_imGuiRenderer.recreateFramebuffers();
@@ -173,8 +177,8 @@ void Renderer::init(Window& window)
     currentFrame = 0;
     Matrices matrices{};
     matrices.model = glm::mat4(1.0f);
-    matrices.viewProj = glm::perspective(glm::radians(45.0f), m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height, 0.1f, 10.0f);
-    matrices.viewProj *= glm::lookAt(glm::vec3(4.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    matrices.viewProj = glm::perspective(glm::radians(45.0f), m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height, 0.1f, 100.0f);
+    matrices.viewProj *= glm::lookAt(glm::vec3(10.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 
     m_viewport.x = 0.0f;
     m_viewport.y = (float)m_swapChain.getExtent().height;
@@ -188,10 +192,17 @@ void Renderer::init(Window& window)
 
     m_graphicsDescriptorSetLayout.init(m_device,
     {
-        { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT },
-        { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT }
+        {
+            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT }
+        },
+        {
+            { 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT }
+        }
     });
-    m_graphicsDescriptorSet.init(m_device, m_graphicsDescriptorSetLayout, MAX_FRAMES_IN_FLIGHT);
+    m_graphicsDescriptorSet.init(m_device, m_graphicsDescriptorSetLayout, 0, MAX_FRAMES_IN_FLIGHT);
+    m_meshDescriptorSet.init(m_device, m_graphicsDescriptorSetLayout, 1);
+    m_floorDescriptorSet.init(m_device, m_graphicsDescriptorSetLayout, 1);
+
     m_graphicsPipelineLayout.init(m_device, &m_graphicsDescriptorSetLayout);
     m_graphicsPipeline.initGraphics(
         m_device, 
@@ -205,10 +216,12 @@ void Renderer::init(Window& window)
 
     m_computeDescriptorSetLayout.init(m_device,
     {
-        { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
-        { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
+        {
+            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
+        }
     });
-    m_computeDescriptorSet.init(m_device, m_computeDescriptorSetLayout, MAX_FRAMES_IN_FLIGHT);
+    m_computeDescriptorSet.init(m_device, m_computeDescriptorSetLayout, 0, MAX_FRAMES_IN_FLIGHT);
     m_computePipelineLayout.init(m_device, &m_computeDescriptorSetLayout);
     m_computePipeline.initCompute(m_device, m_computePipelineLayout, &m_computeDescriptorSet, "shaders/comp.spv");
 
@@ -232,10 +245,12 @@ void Renderer::init(Window& window)
 
     createResources();
 
+    m_meshDescriptorSet.writeTexture(0, 0, m_texture, m_sampler);
+    m_floorDescriptorSet.writeTexture(0, 0, m_floorTexture, m_sampler);
+
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         m_graphicsDescriptorSet.writeBuffer(i, 0, m_matricesUBO[i], m_matricesUBO[i].size());
-        m_graphicsDescriptorSet.writeTexture(i, 1, m_texture, m_sampler);
 
         m_computeDescriptorSet.writeBuffer(i, 0, m_deltaTimeUBO[i], m_deltaTimeUBO[i].size());
         m_computeDescriptorSet.writeBuffer(i, 1, m_mesh.getVertexBuffer(), m_mesh.getVertexBuffer().getSize());
@@ -287,6 +302,8 @@ void Renderer::cleanup()
     m_graphicsPipeline.cleanup();
     m_graphicsPipelineLayout.cleanup();
 
+    m_floorDescriptorSet.cleanup();
+    m_meshDescriptorSet.cleanup();
     m_graphicsDescriptorSet.cleanup();
     m_graphicsDescriptorSetLayout.cleanup();
 

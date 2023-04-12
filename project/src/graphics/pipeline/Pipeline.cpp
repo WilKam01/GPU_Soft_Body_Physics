@@ -10,15 +10,10 @@ void PipelineLayout::init(Device& device, DescriptorSetLayout* layout)
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     if (layout != nullptr)
     {
-        pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &p_descriptorSetLayout->get();
-
-        VkPushConstantRange pushConstantRange = p_descriptorSetLayout->getPushConstantRange();
-        if (pushConstantRange.size > 0)
-        {
-            pipelineLayoutInfo.pushConstantRangeCount = 1;
-            pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
-        }
+        pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(p_descriptorSetLayout->getAll().size());
+        pipelineLayoutInfo.pSetLayouts = p_descriptorSetLayout->getAll().data();
+        pipelineLayoutInfo.pushConstantRangeCount = 0;
+        pipelineLayoutInfo.pPushConstantRanges = nullptr;
     }
 
     if (vkCreatePipelineLayout(p_device->getLogical(), &pipelineLayoutInfo, nullptr, &m_layout) != VK_SUCCESS)
@@ -28,6 +23,20 @@ void PipelineLayout::init(Device& device, DescriptorSetLayout* layout)
 void PipelineLayout::cleanup()
 {
     vkDestroyPipelineLayout(p_device->getLogical(), m_layout, nullptr);
+}
+
+void PipelineLayout::bindDescriptors(VkCommandBuffer commandBuffer, VkPipelineBindPoint bindPoint, const std::vector<VkDescriptorSet>& descriptorSets)
+{
+    vkCmdBindDescriptorSets(
+        commandBuffer,
+        bindPoint,
+        m_layout,
+        0,
+        static_cast<uint32_t>(descriptorSets.size()),
+        descriptorSets.data(),
+        0, 
+        0
+    );
 }
 
 VkShaderModule Pipeline::loadShader(const std::string& path)

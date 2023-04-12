@@ -1,56 +1,48 @@
 #include "pch.h"
 #include "Descriptors.h"
 
-void DescriptorSetLayout::init(Device& device, const std::vector<ShaderBinding>& shaderBindings)
+void DescriptorSetLayout::init(Device& device, const std::vector<std::vector<ShaderBinding>>& shaderBindings)
 {
     p_device = &device;
     m_bindings = shaderBindings;
+    m_layout.resize(shaderBindings.size());
 
-    std::vector<VkDescriptorSetLayoutBinding> bindings(shaderBindings.size());
-    for (int i = 0, len = (int)shaderBindings.size(); i < len; i++)
+    std::vector<std::vector<VkDescriptorSetLayoutBinding>> bindings(shaderBindings.size());
+    for (int i = 0, setLen = (int)shaderBindings.size(); i < setLen; i++)
     {
-        bindings[i].binding = shaderBindings[i].binding;
-        bindings[i].descriptorType = shaderBindings[i].type;
-        bindings[i].stageFlags = shaderBindings[i].shaderStage;
-        bindings[i].descriptorCount = shaderBindings[i].count;
-    }
+        bindings[i].resize(shaderBindings[i].size());
 
-    VkDescriptorSetLayoutCreateInfo layoutInfo{};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-    layoutInfo.pBindings = bindings.data();
+        for (int j = 0, bindLen = (int)shaderBindings[i].size(); j < bindLen; j++)
+        {
+            bindings[i][j].binding = shaderBindings[i][j].binding;
+            bindings[i][j].descriptorType = shaderBindings[i][j].type;
+            bindings[i][j].stageFlags = shaderBindings[i][j].shaderStage;
+            bindings[i][j].descriptorCount = shaderBindings[i][j].count;
+        }
 
-    if (vkCreateDescriptorSetLayout(p_device->getLogical(), &layoutInfo, nullptr, &m_layout) != VK_SUCCESS) {
-        LOG_ERROR("Failed to create descriptor set layout!");
+        VkDescriptorSetLayoutCreateInfo layoutInfo{};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.bindingCount = static_cast<uint32_t>(bindings[i].size());
+        layoutInfo.pBindings = bindings[i].data();
+
+        if (vkCreateDescriptorSetLayout(p_device->getLogical(), &layoutInfo, nullptr, &m_layout[i]) != VK_SUCCESS) {
+            LOG_ERROR("Failed to create descriptor set layout!");
+        }
     }
 }
 
 void DescriptorSetLayout::cleanup()
 {
-    vkDestroyDescriptorSetLayout(p_device->getLogical(), m_layout, nullptr);
-}
-
-void DescriptorSetLayout::setPushConstant(uint32_t size, VkShaderStageFlagBits shaderStage)
-{
-    m_pushConstantSize = size;
-    m_pushConstantShaderStage = shaderStage;
-}
-
-VkPushConstantRange DescriptorSetLayout::getPushConstantRange()
-{
-    VkPushConstantRange range{};
-    range.offset = 0;
-    range.size = m_pushConstantSize;
-    range.stageFlags = m_pushConstantShaderStage;
-    return range;
+    for (int i = 0, len = (int)m_bindings.size(); i < len; i++)
+        vkDestroyDescriptorSetLayout(p_device->getLogical(), m_layout[i], nullptr);
 }
 
 void DescriptorSet::createDescriptorPool()
 {
     std::multiset<VkDescriptorType> poolSizeSet{};
-    for (int i = 0, len = p_layout->bindingSize(); i < len; i++)
+    for (int i = 0, len = p_layout->bindingSize(m_set); i < len; i++)
     {
-        poolSizeSet.insert(p_layout->getBinding(i).type);
+        poolSizeSet.insert(p_layout->getBinding(m_set, i).type);
     }
 
     std::vector<VkDescriptorPoolSize> poolSizes{};
@@ -72,15 +64,16 @@ void DescriptorSet::createDescriptorPool()
         LOG_ERROR("Failed to create descriptor pool!");
 }
 
-void DescriptorSet::init(Device& device, DescriptorSetLayout& layout, int count)
+void DescriptorSet::init(Device& device, DescriptorSetLayout& layout, uint32_t set, uint32_t count)
 {
     p_device = &device;
     p_layout = &layout;
+    m_set = set;
     m_descriptorSet.resize(count);
 
     createDescriptorPool();
 
-    std::vector<VkDescriptorSetLayout> layouts(count, p_layout->get());
+    std::vector<VkDescriptorSetLayout> layouts(count, p_layout->get(m_set));
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     allocInfo.descriptorPool = m_pool;
@@ -108,7 +101,7 @@ void DescriptorSet::writeBuffer(size_t i, uint32_t binding, Buffer& buffer, VkDe
     descriptorWrites.dstSet = m_descriptorSet[i];
     descriptorWrites.dstBinding = binding;
     descriptorWrites.dstArrayElement = 0;
-    descriptorWrites.descriptorType = p_layout->getBinding(binding).type;
+    descriptorWrites.descriptorType = p_layout->getBinding(m_set, binding).type;
     descriptorWrites.descriptorCount = 1;
     descriptorWrites.pBufferInfo = &bufferInfo;
 
@@ -127,7 +120,7 @@ void DescriptorSet::writeTexture(size_t i, uint32_t binding, Texture& texture, S
     descriptorWrites.dstSet = m_descriptorSet[i];
     descriptorWrites.dstBinding = binding;
     descriptorWrites.dstArrayElement = 0;
-    descriptorWrites.descriptorType = p_layout->getBinding(binding).type;
+    descriptorWrites.descriptorType = p_layout->getBinding(m_set, binding).type;
     descriptorWrites.descriptorCount = 1;
     descriptorWrites.pImageInfo = &imageInfo;
 

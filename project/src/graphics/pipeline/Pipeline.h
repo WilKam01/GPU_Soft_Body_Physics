@@ -20,6 +20,8 @@ public:
 	void init(Device& device, DescriptorSetLayout* layout = nullptr);
 	void cleanup();
 
+	void bindDescriptors(VkCommandBuffer commandBuffer, VkPipelineBindPoint bindPoint, const std::vector<VkDescriptorSet>& descriptorSets);
+
 	inline VkPipelineLayout get() { return m_layout; }
 };
 

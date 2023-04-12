@@ -32,8 +32,11 @@ private:
 
 	PipelineLayout m_graphicsPipelineLayout;
 	Pipeline m_graphicsPipeline;
+
 	DescriptorSetLayout m_graphicsDescriptorSetLayout;
 	DescriptorSet m_graphicsDescriptorSet;
+	DescriptorSet m_meshDescriptorSet;
+	DescriptorSet m_floorDescriptorSet;
 
 	PipelineLayout m_computePipelineLayout;
 	Pipeline m_computePipeline;
@@ -57,7 +60,6 @@ private:
 
 	std::vector<UniformBuffer<Matrices>> m_matricesUBO;
 	std::vector<UniformBuffer<float>> m_deltaTimeUBO;
-
 
 	std::vector<VkSemaphore> m_imageAvailableSemaphores;
 	std::vector<VkSemaphore> m_renderFinishedSemaphores;
