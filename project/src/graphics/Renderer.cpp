@@ -119,7 +119,7 @@ void Renderer::createResources()
     };
 
     m_mesh.init(m_device, m_commandPool, vertices, indices);
-    m_texture.init(m_device, m_commandPool, "textures/white.jpg");
+    m_texture.init(m_device, m_commandPool, "assets/textures/white.jpg");
     m_sampler.init(m_device);
 
     static float scale = 100.0f;
@@ -139,7 +139,7 @@ void Renderer::createResources()
     };
 
     m_floorMesh.init(m_device, m_commandPool, floorVertices, floorIndices);
-    m_floorTexture.init(m_device, m_commandPool, "textures/check.jpg");
+    m_floorTexture.init(m_device, m_commandPool, "assets/textures/check.jpg");
 }
 
 void Renderer::recreateSwapChain()
@@ -209,8 +209,8 @@ void Renderer::init(Window& window)
         m_graphicsPipelineLayout, 
         &m_graphicsDescriptorSet, 
         m_swapChain.getRenderPass(), 
-        "shaders/vert.spv", 
-        "shaders/frag.spv",
+        "assets/spv/shader.vert.spv", 
+        "assets/spv/shader.frag.spv",
         { false, true, true }
     );
 
@@ -223,7 +223,7 @@ void Renderer::init(Window& window)
     });
     m_computeDescriptorSet.init(m_device, m_computeDescriptorSetLayout, 0, MAX_FRAMES_IN_FLIGHT);
     m_computePipelineLayout.init(m_device, &m_computeDescriptorSetLayout);
-    m_computePipeline.initCompute(m_device, m_computePipelineLayout, &m_computeDescriptorSet, "shaders/comp.spv");
+    m_computePipeline.initCompute(m_device, m_computePipelineLayout, &m_computeDescriptorSet, "assets/spv/shader.comp.spv");
 
     m_matricesUBO.resize(MAX_FRAMES_IN_FLIGHT);
     m_deltaTimeUBO.resize(MAX_FRAMES_IN_FLIGHT);

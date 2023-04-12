@@ -11,7 +11,8 @@ project "project"
 
     files {
         "**.h",
-        "**.cpp"
+        "**.cpp",
+        "shaders/**"
     }
 
     defines {
@@ -49,3 +50,15 @@ project "project"
     filter "system:windows"
         systemversion "latest"
         defines "WIN32"
+
+    local function compile_shaders()
+        commands = {}
+        for _, file in ipairs(os.matchfiles("shaders/**")) do
+            table.insert(commands, "glslangValidator -V " .. file .. " -o assets/spv/" .. string.gsub(file, "shaders/", "") .. ".spv ")
+        end
+        return commands
+    end
+
+    buildmessage "Compiling shaders..."
+    buildcommands { compile_shaders() }
+    buildoutputs { "assets/spv/**.spv" }
