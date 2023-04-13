@@ -12,6 +12,8 @@
 #include "pipeline/Sampler.h"
 #include "ImGuiRenderer.h"
 #include "resources/Importer.h"
+#include "core/Timer.h"
+#include "core/Camera.h"
 
 struct Matrices 
 {
@@ -25,6 +27,8 @@ public:
 	const static int MAX_FRAMES_IN_FLIGHT = 2;
 private:
 	uint32_t currentFrame;
+	Timer m_timer;
+	Camera m_camera;
 
 	Instance m_instance;
 	Device m_device;

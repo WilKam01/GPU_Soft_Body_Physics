@@ -85,39 +85,6 @@ void Renderer::createSyncObjects()
 
 void Renderer::createResources()
 {
-    /*static std::vector<Vertex> vertices
-    {
-        { glm::vec3(-1.0f, -1.0f, 1.0f), glm::vec2(0.0f, 0.0f) },
-        { glm::vec3(1.0f, -1.0f, 1.0f), glm::vec2(1.0f, 0.0f) },
-        { glm::vec3(-1.0f, 1.0f, 1.0f), glm::vec2(0.0f, 1.0f) },
-        { glm::vec3(1.0f, 1.0f, 1.0f), glm::vec2(1.0f, 1.0f) },
-        { glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec2(0.0f, 0.0f) },
-        { glm::vec3(1.0f, -1.0f, -1.0f), glm::vec2(1.0f, 0.0f) },
-        { glm::vec3(-1.0f, 1.0f, -1.0f), glm::vec2(0.0f, 1.0f) },
-        { glm::vec3(1.0f, 1.0f, -1.0f), glm::vec2(1.0f, 1.0f) },
-    };
-
-    static std::vector<uint32_t> indices
-    {
-        0, 1, 3,
-        0, 3, 2,
-
-        4, 7, 5,
-        4, 6, 7,
-
-        0, 4, 5,
-        0, 5, 1,
-
-        1, 5, 7,
-        1, 7, 3,
-
-        2, 7, 6,
-        2, 3, 7,
-
-        0, 2, 6,
-        0, 6, 4,
-    };*/
-
     m_mesh = Importer::loadMeshOBJ("assets/models/bunny.obj", glm::vec3(0.0f, 1.0f, 0.0f));
 
     static uint8_t white[4] = { 255, 0, 0, 255 };
@@ -158,15 +125,17 @@ void Renderer::recreateSwapChain()
     m_scissor.offset = { 0, 0 };
     m_scissor.extent = m_swapChain.getExtent();
 
+    m_camera.updateAspectRatio(m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height);
+
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         Matrices& matrices = m_matricesUBO[i].get();
-        matrices.model = glm::mat4(1.0f);
-        matrices.viewProj = glm::perspective(glm::radians(45.0f), m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height, 0.1f, 100.0f);
-        matrices.viewProj *= glm::lookAt(glm::vec3(0.0f, 10.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        matrices.viewProj = m_camera.getMatrix();
     }
 
     m_imGuiRenderer.recreateFramebuffers();
+
+    m_timer.reset();
 }
 
 void Renderer::renderImGui()
@@ -200,11 +169,12 @@ void Renderer::init(Window& window)
 	m_device.init(m_instance, m_surface);
 	m_swapChain.init(m_device, m_surface, window);
 
+    m_camera.init(glm::vec3(0.0f, 10.0f, -6.0f), glm::vec3(-60.0f, 0.0f, 0.0f), 90.0f, m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height);
+
     currentFrame = 0;
     Matrices matrices{};
     matrices.model = glm::mat4(1.0f);
-    matrices.viewProj = glm::perspective(glm::radians(45.0f), m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height, 0.1f, 100.0f);
-    matrices.viewProj *= glm::lookAt(glm::vec3(0.0f, 5.0f, 10.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    matrices.viewProj = m_camera.getMatrix();
 
     m_viewport.x = 0.0f;
     m_viewport.y = (float)m_swapChain.getExtent().height;
@@ -282,6 +252,8 @@ void Renderer::init(Window& window)
         m_computeDescriptorSet.writeBuffer(i, 0, m_deltaTimeUBO[i], m_deltaTimeUBO[i].size());
         m_computeDescriptorSet.writeBuffer(i, 1, m_mesh.getVertexBuffer(), m_mesh.getVertexBuffer().getSize());
     }
+
+    m_timer.init();
 }
 
 void Renderer::cleanup()
@@ -342,6 +314,8 @@ void Renderer::cleanup()
 
 void Renderer::render()
 {
+    m_timer.update();
+
     VkDevice device = m_device.getLogical();
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -354,7 +328,7 @@ void Renderer::render()
     //recordCommandBufferCompute(m_computeCommandBufferArray[currentFrame]);
     m_computeCommandBufferArray.end(currentFrame);
 
-    m_deltaTimeUBO[currentFrame].get() = ImGui::GetIO().DeltaTime;
+    m_deltaTimeUBO[currentFrame].get() = m_timer.getDT();
     m_deltaTimeUBO[currentFrame].update();
 
     submitInfo.commandBufferCount = 1;
@@ -384,7 +358,7 @@ void Renderer::render()
     recordCommandBuffer(m_commandBufferArray[currentFrame], imageIndex);
     m_commandBufferArray.end(currentFrame);
 
-    m_matricesUBO[currentFrame].get().model = glm::rotate(glm::mat4(1.0f), (float)ImGui::GetTime() * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    m_matricesUBO[currentFrame].get().model = glm::rotate(glm::mat4(1.0f), m_timer.getTotal() * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     m_matricesUBO[currentFrame].update();
 
     // Update and Render additional Platform Windows
