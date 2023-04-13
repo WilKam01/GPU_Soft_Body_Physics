@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../Device.h"
-#include "../Buffer.h"
-#include "../Texture.h"
+#include "graphics/Device.h"
+#include "graphics/Buffer.h"
+#include "resources/Texture.h"
 #include "Sampler.h"
 
 struct ShaderBinding

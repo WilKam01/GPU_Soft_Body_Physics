@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Device.h"
+#include "graphics/Device.h"
 
 class CommandPool;
 
@@ -22,10 +22,12 @@ private:
 	void createImage(VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties);
 public:
 
+	// Data is expected to be of rgba format
 	void init(
 		Device& device,
 		CommandPool& commandPool,
-		const std::string& path
+		void* data,
+		glm::uvec2 dimensions
 	);
 	void initEmpty(
 		Device& device, 
@@ -58,8 +60,6 @@ public:
 		VkPipelineStageFlags dstStageMask,
 		CommandPool& commandPool
 	);
-
-	void exportJPG(const std::string& path);
 
 	inline VkImage getImage() { return m_image; }
 	inline VkImageView getView() { return m_imageView; }

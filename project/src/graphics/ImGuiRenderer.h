@@ -10,7 +10,6 @@ private:
 	Device* p_device;
 	SwapChain* p_swapChain;
 	CommandPool* p_commandPool;
-	Buffer* p_vertexBuffer;
 
 	VkRenderPass m_renderPass;
 	VkDescriptorPool m_descriptorPool;
@@ -19,11 +18,9 @@ private:
 	void createRenderPass();
 	void createFramebuffers();
 public:
-	void init(Window& window, Instance& instance, Device& device, SwapChain& swapChain, CommandPool& commandPool, Buffer* vertexBuffer);
+	void init(Window& window, Instance& instance, Device& device, SwapChain& swapChain, CommandPool& commandPool);
 	void cleanup();
 	void recreateFramebuffers();
-
-	void render(uint32_t currentFrame);
 
 	inline VkRenderPass getRenderPass() { return m_renderPass; }
 	inline VkFramebuffer getFramebuffer(size_t i) { return m_framebuffers[i]; }

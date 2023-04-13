@@ -1,11 +1,12 @@
 #pragma once
 
-#include "Buffer.h"
-#include "CommandPool.h"
+#include "graphics/Buffer.h"
+#include "graphics/CommandPool.h"
 
 struct Vertex
 {
 	glm::vec3 position;
+	glm::vec3 normal;
 	glm::vec2 uv;
 };
 

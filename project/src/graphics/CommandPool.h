@@ -2,7 +2,7 @@
 
 #include "Device.h"
 #include "Buffer.h"
-#include "Texture.h"
+#include "resources/Texture.h"
 
 class CommandPool
 {

@@ -6,11 +6,12 @@
 #include "CommandPool.h"
 #include "CommandBufferArray.h"
 #include "Buffer.h"
-#include "Mesh.h"
+#include "resources/Mesh.h"
 #include "pipeline/Pipeline.h"
 #include "pipeline/UniformBuffer.h"
 #include "pipeline/Sampler.h"
 #include "ImGuiRenderer.h"
+#include "resources/Importer.h"
 
 struct Matrices 
 {
@@ -77,6 +78,7 @@ private:
 	void createResources();
 
 	void recreateSwapChain();
+	void renderImGui();
 public:
 	void init(Window& window);
 	void cleanup();

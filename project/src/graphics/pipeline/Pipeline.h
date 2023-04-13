@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Descriptors.h"
-#include "../Mesh.h"
+#include "resources/Mesh.h"
 
 struct PipelineSettings
 {

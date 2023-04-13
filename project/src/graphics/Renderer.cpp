@@ -34,7 +34,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 
     vkCmdEndRenderPass(commandBuffer);
 
-    m_imGuiRenderer.render(currentFrame);
+    renderImGui();
 
     renderPassInfo.renderPass = m_imGuiRenderer.getRenderPass();
     renderPassInfo.framebuffer = m_imGuiRenderer.getFramebuffer(imageIndex);
@@ -85,7 +85,7 @@ void Renderer::createSyncObjects()
 
 void Renderer::createResources()
 {
-    static std::vector<Vertex> vertices
+    /*static std::vector<Vertex> vertices
     {
         { glm::vec3(-1.0f, -1.0f, 1.0f), glm::vec2(0.0f, 0.0f) },
         { glm::vec3(1.0f, -1.0f, 1.0f), glm::vec2(1.0f, 0.0f) },
@@ -116,30 +116,32 @@ void Renderer::createResources()
 
         0, 2, 6,
         0, 6, 4,
-    };
+    };*/
 
-    m_mesh.init(m_device, m_commandPool, vertices, indices);
-    m_texture.init(m_device, m_commandPool, "assets/textures/white.jpg");
+    m_mesh = Importer::loadMeshOBJ("assets/models/bunny.obj", glm::vec3(0.0f, 1.0f, 0.0f));
+
+    static uint8_t white[4] = { 255, 0, 0, 255 };
+    m_texture.init(m_device, m_commandPool, &white, glm::uvec2(1, 1));
     m_sampler.init(m_device);
 
     static float scale = 100.0f;
     static float uvScale = 10.0f;
     static std::vector<Vertex> floorVertices
     {
-        { glm::vec3(-1.0f, -1.0f, 0.0f) * scale, glm::vec2(0.0f, 0.0f) * uvScale },
-        { glm::vec3(1.0f, -1.0f, 0.0f) * scale, glm::vec2(1.0f, 0.0f) * uvScale },
-        { glm::vec3(-1.0f, 1.0f, 0.0f) * scale, glm::vec2(0.0f, 1.0f) * uvScale },
-        { glm::vec3(1.0f, 1.0f, 0.0f) * scale, glm::vec2(1.0f, 1.0f) * uvScale },
+        { glm::vec3(1.0f, 0.0f, 1.0f) * scale, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(1.0f, 0.0f) * uvScale },
+        { glm::vec3(-1.0f, 0.0f, -1.0f) * scale, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(0.0f, 1.0f) * uvScale },
+        { glm::vec3(-1.0f, 0.0f, 1.0f) * scale, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(0.0f, 0.0f) * uvScale },
+        { glm::vec3(1.0f, 0.0f, -1.0f) * scale, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(1.0f, 1.0f) * uvScale },
     };
 
     static std::vector<uint32_t> floorIndices
     {
-        0, 1, 3,
-        0, 3, 2,
+        0, 1, 2,
+        0, 3, 1,
     };
 
     m_floorMesh.init(m_device, m_commandPool, floorVertices, floorIndices);
-    m_floorTexture.init(m_device, m_commandPool, "assets/textures/check.jpg");
+    m_floorTexture = Importer::loadTexture("assets/textures/check.jpg");
 }
 
 void Renderer::recreateSwapChain()
@@ -161,10 +163,34 @@ void Renderer::recreateSwapChain()
         Matrices& matrices = m_matricesUBO[i].get();
         matrices.model = glm::mat4(1.0f);
         matrices.viewProj = glm::perspective(glm::radians(45.0f), m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height, 0.1f, 100.0f);
-        matrices.viewProj *= glm::lookAt(glm::vec3(10.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        matrices.viewProj *= glm::lookAt(glm::vec3(0.0f, 10.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     }
 
     m_imGuiRenderer.recreateFramebuffers();
+}
+
+void Renderer::renderImGui()
+{
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    //------------------------------------------
+
+    ImGui::Begin("Copy image");
+
+    if (ImGui::Button("Copy!"))
+    {
+        Texture texture = m_swapChain.copyImage(currentFrame, m_commandPool);
+        Importer::exportJPG(texture, "../screenshot.jpg");
+        texture.cleanup();
+    }
+
+    ImGui::End();
+
+    //------------------------------------------
+
+    ImGui::Render();
 }
 
 void Renderer::init(Window& window)
@@ -178,7 +204,7 @@ void Renderer::init(Window& window)
     Matrices matrices{};
     matrices.model = glm::mat4(1.0f);
     matrices.viewProj = glm::perspective(glm::radians(45.0f), m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height, 0.1f, 100.0f);
-    matrices.viewProj *= glm::lookAt(glm::vec3(10.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    matrices.viewProj *= glm::lookAt(glm::vec3(0.0f, 5.0f, 10.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
     m_viewport.x = 0.0f;
     m_viewport.y = (float)m_swapChain.getExtent().height;
@@ -241,7 +267,8 @@ void Renderer::init(Window& window)
 
     createSyncObjects();
 
-    m_imGuiRenderer.init(window, m_instance, m_device, m_swapChain, m_commandPool, &m_mesh.getVertexBuffer());
+    m_imGuiRenderer.init(window, m_instance, m_device, m_swapChain, m_commandPool);
+    Importer::init(m_device, m_commandPool);
 
     createResources();
 
@@ -357,7 +384,7 @@ void Renderer::render()
     recordCommandBuffer(m_commandBufferArray[currentFrame], imageIndex);
     m_commandBufferArray.end(currentFrame);
 
-    m_matricesUBO[currentFrame].get().model = glm::rotate(glm::mat4(1.0f), (float)ImGui::GetTime() * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    m_matricesUBO[currentFrame].get().model = glm::rotate(glm::mat4(1.0f), (float)ImGui::GetTime() * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     m_matricesUBO[currentFrame].update();
 
     // Update and Render additional Platform Windows

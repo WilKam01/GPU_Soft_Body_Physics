@@ -16,6 +16,7 @@ includeDir = {
     glm = "%{wks.location}/external/glm",
     imgui = "%{wks.location}/external/imgui",
     stb = "%{wks.location}/external/stb",
+    fastobj = "%{wks.location}/external/fast_obj",
     vulkanSDK = "%{Vulkan_SDK}/Include",
 }
 

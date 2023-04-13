@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Buffer.h"
+#include "graphics/Buffer.h"
 
 template <typename T>
 class UniformBuffer : public Buffer

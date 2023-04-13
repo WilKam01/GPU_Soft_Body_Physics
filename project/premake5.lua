@@ -26,6 +26,7 @@ project "project"
 	    "%{includeDir.glm}",
 	    "%{includeDir.imgui}",
 	    "%{includeDir.stb}",
+	    "%{includeDir.fastobj}",
 	    "%{includeDir.vulkanSDK}"
     }
 

@@ -82,12 +82,11 @@ void ImGuiRenderer::createFramebuffers()
     }
 }
 
-void ImGuiRenderer::init(Window& window, Instance& instance, Device& device, SwapChain& swapChain, CommandPool& commandPool, Buffer* vertexBuffer)
+void ImGuiRenderer::init(Window& window, Instance& instance, Device& device, SwapChain& swapChain, CommandPool& commandPool)
 {
     p_device = &device;
     p_swapChain = &swapChain;
     p_commandPool = &commandPool;
-    p_vertexBuffer = vertexBuffer;
 
     createRenderPass();
 
@@ -195,46 +194,4 @@ void ImGuiRenderer::recreateFramebuffers()
         vkDestroyFramebuffer(p_device->getLogical(), framebuffer, nullptr);
     }
     createFramebuffers();
-}
-
-void ImGuiRenderer::render(uint32_t currentFrame)
-{
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    //------------------------------------------
-
-    /*static Vertex vertices[3];
-    p_vertexBuffer->map();
-    memcpy(vertices, p_vertexBuffer->getMapped(), sizeof(Vertex) * 3);
-
-    ImGui::Begin("Vertex data");
-
-    ImGui::DragFloat3("pos_0", (float*)&vertices[0].position, 0.1f, -1.0f, 1.0f);
-    ImGui::DragFloat3("col_0", (float*)&vertices[0].color, 0.1f, -1.0f, 1.0f);
-    ImGui::DragFloat3("pos_1", (float*)&vertices[1].position, 0.1f, -1.0f, 1.0f);
-    ImGui::DragFloat3("col_1", (float*)&vertices[1].color, 0.1f, -1.0f, 1.0f);
-    ImGui::DragFloat3("pos_2", (float*)&vertices[2].position, 0.1f, -1.0f, 1.0f);
-    ImGui::DragFloat3("col_2", (float*)&vertices[2].color, 0.1f, -1.0f, 1.0f);
-
-    ImGui::End();
-
-    p_vertexBuffer->writeTo(vertices, sizeof(Vertex) * 3);
-    p_vertexBuffer->unmap();*/
-
-    ImGui::Begin("Copy image");
-
-    if (ImGui::Button("Copy!"))
-    {
-        Texture texture = p_swapChain->copyImage(currentFrame, *p_commandPool);
-        texture.exportJPG("../screenshot.jpg");
-        texture.cleanup();
-    }
-
-    ImGui::End();
-
-    //------------------------------------------
-
-    ImGui::Render();
 }

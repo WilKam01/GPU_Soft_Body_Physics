@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Device.h"
+#include "graphics/Device.h"
 
 class Sampler
 {

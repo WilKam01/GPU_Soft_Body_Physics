@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Device.h"
-#include "Texture.h"
+#include "resources/Texture.h"
 
 struct SwapChainSupportDetails {
 	VkSurfaceCapabilitiesKHR capabilities;

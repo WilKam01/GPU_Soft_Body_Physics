@@ -1,11 +1,6 @@
 #include "pch.h"
 #include "Texture.h"
-#include "CommandPool.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <stb_image_write.h>
+#include "graphics/CommandPool.h"
 
 VkFormat Texture::findDepthFormat()
 {
@@ -64,21 +59,14 @@ void Texture::createImage(VkImageTiling tiling, VkImageUsageFlags usage, VkMemor
 void Texture::init(
     Device& device,
     CommandPool& commandPool,
-    const std::string& path
+    void* data,
+    glm::uvec2 dimensions
 )
 {
     p_device = &device;
-    m_dimensions = glm::uvec2(0, 0);
+    m_dimensions = dimensions;
     m_format = VK_FORMAT_R8G8B8A8_UNORM;
     m_hasImageView = false;
-
-    int channels = 0;
-    stbi_uc* data = stbi_load(path.c_str(), (int*)&m_dimensions.x, (int*)&m_dimensions.y, &channels, STBI_rgb_alpha);
-    if (!data)
-    {
-        LOG_WARNING("Failed to load texture with image path: " + path);
-        return;
-    }
 
     VkDeviceSize size = m_dimensions.x * m_dimensions.y * 4;
 
@@ -89,7 +77,6 @@ void Texture::init(
         size,
         data
     );
-    stbi_image_free(data);
 
     createImage(VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
@@ -235,12 +222,4 @@ void Texture::transistionImageLayout(
     );
 
     commandPool.endSingleTimeCommand(commandBuffer);
-}
-
-void Texture::exportJPG(const std::string& path)
-{
-    const char* data;
-    vkMapMemory(p_device->getLogical(), m_memory, 0, VK_WHOLE_SIZE, 0, (void**)&data);
-    stbi_write_jpg(path.c_str(), m_dimensions.x, m_dimensions.y, 4, data, m_dimensions.x * 4);
-    vkUnmapMemory(p_device->getLogical(), m_memory);
 }
