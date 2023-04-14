@@ -15,10 +15,16 @@
 #include "core/Timer.h"
 #include "core/Camera.h"
 
-struct Matrices 
+struct GraphicsUBO 
 {
-	glm::mat4 model;
 	glm::mat4 viewProj;
+	glm::vec3 camPos;
+	float lightIntensity;
+	glm::vec3 lightPos;
+	float lightCone;
+	glm::vec3 lightDir;
+	float specPower;
+	glm::vec4 globalAmbient;
 };
 
 class Renderer
@@ -63,7 +69,7 @@ private:
 	CommandPool m_computeCommandPool;
 	CommandBufferArray m_computeCommandBufferArray;
 
-	std::vector<UniformBuffer<Matrices>> m_matricesUBO;
+	std::vector<UniformBuffer<GraphicsUBO>> m_graphicsUBO;
 	std::vector<UniformBuffer<float>> m_deltaTimeUBO;
 
 	std::vector<VkSemaphore> m_imageAvailableSemaphores;

@@ -3,10 +3,6 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
-# Additional ignores
-*.spv
-**/imgui.ini
-
 # User-specific files
 *.rsuser
 *.suo
@@ -358,3 +354,8 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+
+# Additional ignores
+*.spv
+**/imgui.ini
+!**/models/*.obj

@@ -12,7 +12,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     renderPassInfo.renderArea.extent = m_swapChain.getExtent();
 
     std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+    clearValues[0].color = { 0.01f, 0.01f, 0.01f, 1.0f };
     clearValues[1].depthStencil = { 1.0f, 0 };
 
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
@@ -87,12 +87,12 @@ void Renderer::createResources()
 {
     m_mesh = Importer::loadMeshOBJ("assets/models/bunny.obj", glm::vec3(0.0f, 1.0f, 0.0f));
 
-    static uint8_t white[4] = { 255, 0, 0, 255 };
-    m_texture.init(m_device, m_commandPool, &white, glm::uvec2(1, 1));
+    static uint8_t pixel[4] = { 25, 25, 205, 255 };
+    m_texture.init(m_device, m_commandPool, &pixel, glm::uvec2(1, 1));
     m_sampler.init(m_device);
 
-    static float scale = 100.0f;
-    static float uvScale = 10.0f;
+    static float scale = 200.0f;
+    static float uvScale = 50.0f;
     static std::vector<Vertex> floorVertices
     {
         { glm::vec3(1.0f, 0.0f, 1.0f) * scale, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(1.0f, 0.0f) * uvScale },
@@ -129,8 +129,9 @@ void Renderer::recreateSwapChain()
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        Matrices& matrices = m_matricesUBO[i].get();
-        matrices.viewProj = m_camera.getMatrix();
+        GraphicsUBO& graphics = m_graphicsUBO[i].get();
+        graphics.viewProj = m_camera.getMatrix();
+        m_graphicsUBO[i].update();
     }
 
     m_imGuiRenderer.recreateFramebuffers();
@@ -157,6 +158,21 @@ void Renderer::renderImGui()
 
     ImGui::End();
 
+    static GraphicsUBO& ubo = m_graphicsUBO[currentFrame].get();
+    
+    ImGui::Begin("Scene settings");
+
+    ImGui::SliderFloat4("Global ambient", (float*)&ubo.globalAmbient, 0.0f, 1.0f);
+    ImGui::SliderFloat3("Light position", (float*)&ubo.lightPos, -10.0f, 10.0f);
+    ImGui::SliderFloat("Light intensity", &ubo.lightIntensity, -1.0f, 10.0f);
+    ImGui::SliderFloat("Light cone", &ubo.lightCone, 0.0f, 1.0f);
+    ImGui::SliderFloat("Specular power", &ubo.specPower, 0.0f, 100.0f);
+
+    m_graphicsUBO[currentFrame].get() = ubo;
+    m_graphicsUBO[currentFrame].update();
+
+    ImGui::End();
+
     //------------------------------------------
 
     ImGui::Render();
@@ -169,12 +185,18 @@ void Renderer::init(Window& window)
 	m_device.init(m_instance, m_surface);
 	m_swapChain.init(m_device, m_surface, window);
 
-    m_camera.init(glm::vec3(0.0f, 10.0f, -6.0f), glm::vec3(-60.0f, 0.0f, 0.0f), 90.0f, m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height);
+    m_camera.init(glm::vec3(0.0f, 5.0f, 6.0f), glm::vec3(-30.0f, 0.0f, 0.0f), 90.0f, m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height);
 
     currentFrame = 0;
-    Matrices matrices{};
-    matrices.model = glm::mat4(1.0f);
-    matrices.viewProj = m_camera.getMatrix();
+    GraphicsUBO graphics{};
+    graphics.viewProj = m_camera.getMatrix();
+    graphics.globalAmbient = glm::vec4(0.01f);
+    graphics.lightPos = glm::vec3(0.0f, 10.0f, 5.0f);
+    graphics.lightDir = glm::normalize(-graphics.lightPos);
+    graphics.lightCone = 0.75f;
+    graphics.lightIntensity = 3.0f;
+    graphics.specPower = 70.0f;
+    graphics.camPos = m_camera.getPosition();
 
     m_viewport.x = 0.0f;
     m_viewport.y = (float)m_swapChain.getExtent().height;
@@ -189,7 +211,7 @@ void Renderer::init(Window& window)
     m_graphicsDescriptorSetLayout.init(m_device,
     {
         {
-            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT }
+            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT }
         },
         {
             { 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT }
@@ -221,11 +243,11 @@ void Renderer::init(Window& window)
     m_computePipelineLayout.init(m_device, &m_computeDescriptorSetLayout);
     m_computePipeline.initCompute(m_device, m_computePipelineLayout, &m_computeDescriptorSet, "assets/spv/shader.comp.spv");
 
-    m_matricesUBO.resize(MAX_FRAMES_IN_FLIGHT);
+    m_graphicsUBO.resize(MAX_FRAMES_IN_FLIGHT);
     m_deltaTimeUBO.resize(MAX_FRAMES_IN_FLIGHT);
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        m_matricesUBO[i].init(m_device, matrices);
+        m_graphicsUBO[i].init(m_device, graphics);
         m_deltaTimeUBO[i].init(m_device, 0.0f);
     }
 
@@ -247,7 +269,7 @@ void Renderer::init(Window& window)
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        m_graphicsDescriptorSet.writeBuffer(i, 0, m_matricesUBO[i], m_matricesUBO[i].size());
+        m_graphicsDescriptorSet.writeBuffer(i, 0, m_graphicsUBO[i], m_graphicsUBO[i].size());
 
         m_computeDescriptorSet.writeBuffer(i, 0, m_deltaTimeUBO[i], m_deltaTimeUBO[i].size());
         m_computeDescriptorSet.writeBuffer(i, 1, m_mesh.getVertexBuffer(), m_mesh.getVertexBuffer().getSize());
@@ -288,7 +310,7 @@ void Renderer::cleanup()
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        m_matricesUBO[i].cleanup();
+        m_graphicsUBO[i].cleanup();
         m_deltaTimeUBO[i].cleanup();
     }
 
@@ -358,8 +380,9 @@ void Renderer::render()
     recordCommandBuffer(m_commandBufferArray[currentFrame], imageIndex);
     m_commandBufferArray.end(currentFrame);
 
-    m_matricesUBO[currentFrame].get().model = glm::rotate(glm::mat4(1.0f), m_timer.getTotal() * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    m_matricesUBO[currentFrame].update();
+    //m_camera.setRotation(m_camera.getRotation() + glm::vec3(0.0f, m_timer.getDT() * 75.0f, 0.0f));
+    //m_graphicsUBO[currentFrame].get().viewProj = m_camera.getMatrix();
+    //m_graphicsUBO[currentFrame].update();
 
     // Update and Render additional Platform Windows
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
