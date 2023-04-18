@@ -75,7 +75,7 @@ void Instance::init(Window& window)
 		LOG_ERROR("Requested validation layers not available!");
 
 	VkApplicationInfo appInfo{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
-	appInfo.pEngineName = "Raytracing"; //TODO: change to actual name
+	appInfo.pEngineName = "Thesis";
 	appInfo.pApplicationName = window.getName().c_str();
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);

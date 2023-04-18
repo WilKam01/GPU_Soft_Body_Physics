@@ -32,6 +32,10 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     m_floorMesh.bind(commandBuffer);
     vkCmdDrawIndexed(commandBuffer, m_floorMesh.getIndexCount(), 1, 0, 0, 0);
 
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_tetPipeline.get());
+    m_tetPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_tetDescriptorSet.get(0) });
+    vkCmdDraw(commandBuffer, 12, m_tetMesh.getTetCount(), 0, 0);
+
     vkCmdEndRenderPass(commandBuffer);
 
     renderImGui();
@@ -85,7 +89,38 @@ void Renderer::createSyncObjects()
 
 void Renderer::createResources()
 {
-    m_mesh = Importer::loadMeshOBJ("assets/models/bunny.obj", glm::vec3(0.0f, 1.0f, 0.0f));
+    MeshData mesh = ResourceManager::loadMeshOBJ("assets/models/icosphere50.obj", glm::vec3(0.0f, 1.0f, 0.0f));
+    m_mesh.init(m_device, m_commandPool, mesh);
+
+    TetrahedralMeshData tetMesh = ResourceManager::loadTetrahedralMeshOBJ("assets/models/icosphereTet.obj", glm::vec3(0.0f, 1.0f, 0.0f));
+    /*TetrahedralMeshData tetMesh = {
+        {
+            glm::vec4(1.0f, 1.0f, 1.0f, 1.0f),
+            glm::vec4(-1.0f, 1.0f, -1.0f, 1.0f),
+            glm::vec4(-1.0f, 1.0f, 1.0f, 1.0f),
+            glm::vec4(1.0f, 1.0f, -1.0f, 1.0f),
+            glm::vec4(1.0f, -1.0f, 1.0f, 1.0f),
+            glm::vec4(-1.0f, -1.0f, -1.0f, 1.0f),
+            glm::vec4(-1.0f, -1.0f, 1.0f, 1.0f),
+            glm::vec4(1.0f, -1.0f, -1.0f, 1.0f),
+            glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
+        },
+        {
+            glm::uvec4(0, 3, 4, 8),
+            glm::uvec4(7, 4, 3, 8),
+            glm::uvec4(0, 2, 3, 8),
+            glm::uvec4(1, 3, 2, 8),
+            glm::uvec4(1, 5, 7, 8),
+            glm::uvec4(1, 7, 3, 8),
+            glm::uvec4(1, 2, 5, 8),
+            glm::uvec4(2, 6, 5, 8),
+            glm::uvec4(0, 4, 2, 8),
+            glm::uvec4(2, 4, 6, 8),
+            glm::uvec4(4, 7, 6, 8),
+            glm::uvec4(5, 6, 7, 8)
+        }
+    };*/
+    m_tetMesh.init(m_device, m_commandPool, tetMesh);
 
     static uint8_t pixel[4] = { 25, 25, 205, 255 };
     m_texture.init(m_device, m_commandPool, &pixel, glm::uvec2(1, 1));
@@ -93,12 +128,26 @@ void Renderer::createResources()
 
     static float scale = 200.0f;
     static float uvScale = 50.0f;
-    static std::vector<Vertex> floorVertices
+    static VertexStream floorVertices
     {
-        { glm::vec3(1.0f, 0.0f, 1.0f) * scale, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(1.0f, 0.0f) * uvScale },
-        { glm::vec3(-1.0f, 0.0f, -1.0f) * scale, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(0.0f, 1.0f) * uvScale },
-        { glm::vec3(-1.0f, 0.0f, 1.0f) * scale, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(0.0f, 0.0f) * uvScale },
-        { glm::vec3(1.0f, 0.0f, -1.0f) * scale, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(1.0f, 1.0f) * uvScale },
+        {
+            glm::vec3(1.0f, 0.0f, 1.0f) * scale,
+            glm::vec3(-1.0f, 0.0f, -1.0f) * scale,
+            glm::vec3(-1.0f, 0.0f, 1.0f) * scale,
+            glm::vec3(1.0f, 0.0f, -1.0f) * scale
+        },
+        {
+            glm::vec3(0.0f, 1.0f, 0.0f),
+            glm::vec3(0.0f, 1.0f, 0.0f),
+            glm::vec3(0.0f, 1.0f, 0.0f),
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        },
+        {
+            glm::vec2(1.0f, 0.0f) * uvScale,
+            glm::vec2(0.0f, 1.0f) * uvScale,
+            glm::vec2(0.0f, 0.0f) * uvScale,
+            glm::vec2(1.0f, 1.0f) * uvScale,
+        }
     };
 
     static std::vector<uint32_t> floorIndices
@@ -107,8 +156,8 @@ void Renderer::createResources()
         0, 3, 1,
     };
 
-    m_floorMesh.init(m_device, m_commandPool, floorVertices, floorIndices);
-    m_floorTexture = Importer::loadTexture("assets/textures/check.jpg");
+    m_floorMesh.init(m_device, m_commandPool, { floorVertices, floorIndices });
+    m_floorTexture = ResourceManager::loadTexture("assets/textures/check.jpg");
 }
 
 void Renderer::recreateSwapChain()
@@ -152,7 +201,7 @@ void Renderer::renderImGui()
     if (ImGui::Button("Copy!"))
     {
         Texture texture = m_swapChain.copyImage(currentFrame, m_commandPool);
-        Importer::exportJPG(texture, "../screenshot.jpg");
+        ResourceManager::exportJPG(texture, "../screenshot.jpg");
         texture.cleanup();
     }
 
@@ -167,6 +216,16 @@ void Renderer::renderImGui()
     ImGui::SliderFloat("Light intensity", &ubo.lightIntensity, -1.0f, 10.0f);
     ImGui::SliderFloat("Light cone", &ubo.lightCone, 0.0f, 1.0f);
     ImGui::SliderFloat("Specular power", &ubo.specPower, 0.0f, 100.0f);
+
+    ImGui::Text("Camera settings");
+    glm::vec3 camPos = m_camera.getPosition(), camRot = m_camera.getRotation();
+    ImGui::SliderFloat3("Position", (float*)&camPos, -10.0f, 10.0f, "%.4f");
+    ImGui::SliderFloat3("Rotation", (float*)&camRot, -180.0f, 180.0f, "%.4f");
+
+    m_camera.setPosition(camPos);
+    m_camera.setRotation(camRot);
+    ubo.camPos = camPos;
+    ubo.viewProj = m_camera.getMatrix();
 
     m_graphicsUBO[currentFrame].get() = ubo;
     m_graphicsUBO[currentFrame].update();
@@ -185,7 +244,7 @@ void Renderer::init(Window& window)
 	m_device.init(m_instance, m_surface);
 	m_swapChain.init(m_device, m_surface, window);
 
-    m_camera.init(glm::vec3(0.0f, 5.0f, 6.0f), glm::vec3(-30.0f, 0.0f, 0.0f), 90.0f, m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height);
+    m_camera.init(glm::vec3(0.0f, 2.0f, 3.0f), glm::vec3(-30.0f, 0.0f, 0.0f), 90.0f, m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height);
 
     currentFrame = 0;
     GraphicsUBO graphics{};
@@ -225,11 +284,33 @@ void Renderer::init(Window& window)
     m_graphicsPipeline.initGraphics(
         m_device, 
         m_graphicsPipelineLayout, 
-        &m_graphicsDescriptorSet, 
         m_swapChain.getRenderPass(), 
         "assets/spv/shader.vert.spv", 
         "assets/spv/shader.frag.spv",
-        { false, true, true }
+        { VK_POLYGON_MODE_FILL, true, true },
+        VERTEX_STREAM_INPUT_ALL
+    );
+
+    m_tetDescriptorSetLayout.init(m_device,
+    {
+        {
+            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT }
+        },
+        {
+            { 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT },
+            { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT }
+        }
+    });
+    m_tetDescriptorSet.init(m_device, m_tetDescriptorSetLayout, 1);
+    m_tetPipelineLayout.init(m_device, &m_tetDescriptorSetLayout);
+    m_tetPipeline.initGraphics(
+        m_device,
+        m_tetPipelineLayout,
+        m_swapChain.getRenderPass(),
+        "assets/spv/tetrahedral.vert.spv",
+        "assets/spv/simple.frag.spv",
+        { VK_POLYGON_MODE_LINE, false, false },
+        VERTEX_STREAM_INPUT_NONE
     );
 
     m_computeDescriptorSetLayout.init(m_device,
@@ -241,7 +322,7 @@ void Renderer::init(Window& window)
     });
     m_computeDescriptorSet.init(m_device, m_computeDescriptorSetLayout, 0, MAX_FRAMES_IN_FLIGHT);
     m_computePipelineLayout.init(m_device, &m_computeDescriptorSetLayout);
-    m_computePipeline.initCompute(m_device, m_computePipelineLayout, &m_computeDescriptorSet, "assets/spv/shader.comp.spv");
+    m_computePipeline.initCompute(m_device, m_computePipelineLayout, "assets/spv/shader.comp.spv");
 
     m_graphicsUBO.resize(MAX_FRAMES_IN_FLIGHT);
     m_deltaTimeUBO.resize(MAX_FRAMES_IN_FLIGHT);
@@ -260,19 +341,22 @@ void Renderer::init(Window& window)
     createSyncObjects();
 
     m_imGuiRenderer.init(window, m_instance, m_device, m_swapChain, m_commandPool);
-    Importer::init(m_device, m_commandPool);
+    ResourceManager::init(m_device, m_commandPool);
 
     createResources();
 
     m_meshDescriptorSet.writeTexture(0, 0, m_texture, m_sampler);
     m_floorDescriptorSet.writeTexture(0, 0, m_floorTexture, m_sampler);
 
+    m_tetDescriptorSet.writeBuffer(0, 0, m_tetMesh.getPositionBuffer(), m_tetMesh.getPositionBuffer().getSize());
+    m_tetDescriptorSet.writeBuffer(0, 1, m_tetMesh.getTetIdBuffer(), m_tetMesh.getTetIdBuffer().getSize());
+
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         m_graphicsDescriptorSet.writeBuffer(i, 0, m_graphicsUBO[i], m_graphicsUBO[i].size());
 
         m_computeDescriptorSet.writeBuffer(i, 0, m_deltaTimeUBO[i], m_deltaTimeUBO[i].size());
-        m_computeDescriptorSet.writeBuffer(i, 1, m_mesh.getVertexBuffer(), m_mesh.getVertexBuffer().getSize());
+        //m_computeDescriptorSet.writeBuffer(i, 1, m_mesh.getVertexBuffer(0), m_mesh.getVertexBuffer(0).getSize());
     }
 
     m_timer.init();
@@ -291,6 +375,7 @@ void Renderer::cleanup()
     m_sampler.cleanup();
     m_texture.cleanup();
     m_mesh.cleanup();
+    m_tetMesh.cleanup();
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
     {
@@ -319,6 +404,12 @@ void Renderer::cleanup()
 
     m_computeDescriptorSet.cleanup();
     m_computeDescriptorSetLayout.cleanup();
+
+    m_tetPipeline.cleanup();
+    m_tetPipelineLayout.cleanup();
+
+    m_tetDescriptorSet.cleanup();
+    m_tetDescriptorSetLayout.cleanup();
 
     m_graphicsPipeline.cleanup();
     m_graphicsPipelineLayout.cleanup();

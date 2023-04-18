@@ -11,7 +11,7 @@
 #include "pipeline/UniformBuffer.h"
 #include "pipeline/Sampler.h"
 #include "ImGuiRenderer.h"
-#include "resources/Importer.h"
+#include "resources/ResourceManager.h"
 #include "core/Timer.h"
 #include "core/Camera.h"
 
@@ -49,6 +49,11 @@ private:
 	DescriptorSet m_meshDescriptorSet;
 	DescriptorSet m_floorDescriptorSet;
 
+	PipelineLayout m_tetPipelineLayout;
+	Pipeline m_tetPipeline;
+	DescriptorSetLayout m_tetDescriptorSetLayout;
+	DescriptorSet m_tetDescriptorSet;
+
 	PipelineLayout m_computePipelineLayout;
 	Pipeline m_computePipeline;
 	DescriptorSetLayout m_computeDescriptorSetLayout;
@@ -57,6 +62,7 @@ private:
 	Texture m_texture;
 	Sampler m_sampler;
 	Mesh m_mesh;
+	TetrahedralMesh m_tetMesh;
 
 	Texture m_floorTexture;
 	Mesh m_floorMesh;

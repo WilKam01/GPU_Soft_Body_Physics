@@ -28,7 +28,7 @@ void main()
 	float attentuation = 1.0 / (1.0 + length(toLight));
 
 	vec3 diffuse = texture(texSampler, uvCoord).rgb * clamp(dot(worldNormal, toLightDir), 0.0, 1.0);
-	vec3 specular = vec3(1.0) * pow(max(dot(worldNormal, halfwayDir), 0.0), ubo.specPower);
+	vec3 specular = vec3(0.25) * pow(max(dot(worldNormal, halfwayDir), 0.0), ubo.specPower);
 
 	vec3 final = ubo.globalAmbient.xyz * texture(texSampler, uvCoord).rgb;
 	final += (diffuse + specular) * ubo.lightIntensity * attentuation * clamp((dot(-toLightDir, ubo.lightDir) - ubo.lightCone) / (1.0 - ubo.lightCone), 0.0, 1.0);

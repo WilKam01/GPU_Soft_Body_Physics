@@ -68,16 +68,15 @@ VkShaderModule Pipeline::loadShader(const std::string& path)
 void Pipeline::initGraphics(
     Device& device,
     PipelineLayout& layout,
-    DescriptorSet* descriptorSet,
     VkRenderPass renderPass,
     const std::string& vertexShaderPath,
     const std::string& fragmentShaderPath,
-    PipelineSettings settings
+    PipelineSettings settings,
+    VertexStreamInput inputStreams
 )
 {
     p_device = &device;
     p_layout = &layout;
-    p_descriptorSet = descriptorSet;
     m_bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
     VkShaderModule vertShaderModule = loadShader(vertexShaderPath);
@@ -97,20 +96,34 @@ void Pipeline::initGraphics(
 
     VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
-    VkVertexInputBindingDescription vertexInputBindingDesc = { 0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX };
-    VkVertexInputAttributeDescription vertexInputAttributeDesc[3] =
+    std::vector<VkVertexInputBindingDescription> vertexInputBindingDescs{};
+    std::vector<VkVertexInputAttributeDescription> vertexInputAttributeDescs{};
+
+    if (inputStreams & VERTEX_STREAM_INPUT_POSITION)
     {
-        { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, position) },
-        { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex, normal) },
-        { 2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, uv) },
-    };
+        vertexInputBindingDescs.push_back({ (uint32_t)vertexInputBindingDescs.size(), sizeof(glm::vec3), VK_VERTEX_INPUT_RATE_VERTEX });
+        uint32_t index = (uint32_t)vertexInputAttributeDescs.size();
+        vertexInputAttributeDescs.push_back({ index, index, VK_FORMAT_R32G32B32_SFLOAT, 0 });
+    }
+    if (inputStreams & VERTEX_STREAM_INPUT_NORMAL)
+    {
+        vertexInputBindingDescs.push_back({ (uint32_t)vertexInputBindingDescs.size(), sizeof(glm::vec3), VK_VERTEX_INPUT_RATE_VERTEX });
+        uint32_t index = (uint32_t)vertexInputAttributeDescs.size();
+        vertexInputAttributeDescs.push_back({ index, index, VK_FORMAT_R32G32B32_SFLOAT, 0 });
+    }
+    if (inputStreams & VERTEX_STREAM_INPUT_UV)
+    {
+        vertexInputBindingDescs.push_back({ (uint32_t)vertexInputBindingDescs.size(), sizeof(glm::vec2), VK_VERTEX_INPUT_RATE_VERTEX });
+        uint32_t index = (uint32_t)vertexInputAttributeDescs.size();
+        vertexInputAttributeDescs.push_back({ index, index, VK_FORMAT_R32G32_SFLOAT, 0 });
+    }
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = 1;
-    vertexInputInfo.pVertexBindingDescriptions = &vertexInputBindingDesc;
-    vertexInputInfo.vertexAttributeDescriptionCount = 3;
-    vertexInputInfo.pVertexAttributeDescriptions = vertexInputAttributeDesc;
+    vertexInputInfo.vertexBindingDescriptionCount = (uint32_t)vertexInputBindingDescs.size();
+    vertexInputInfo.pVertexBindingDescriptions = vertexInputBindingDescs.data();
+    vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)vertexInputAttributeDescs.size();
+    vertexInputInfo.pVertexAttributeDescriptions = vertexInputAttributeDescs.data();
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -126,7 +139,7 @@ void Pipeline::initGraphics(
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = settings.wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
+    rasterizer.polygonMode = settings.polygonMode;
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = settings.backfaceCulling ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE;
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
@@ -217,13 +230,11 @@ void Pipeline::initGraphics(
 void Pipeline::initCompute(
     Device& device,
     PipelineLayout& layout,
-    DescriptorSet* descriptorSet,
     const std::string& shaderPath
 )
 {
     p_device = &device;
     p_layout = &layout;
-    p_descriptorSet = descriptorSet;
     m_bindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
 
     VkShaderModule shaderModule = loadShader(shaderPath);

@@ -2,8 +2,9 @@
 
 #include "Texture.h"
 #include "Mesh.h"
+#include "TetrahedralMesh.h"
 
-class Importer
+class ResourceManager
 {
 private:
 	static Device* s_device;
@@ -15,6 +16,7 @@ public:
 	static void exportJPG(Texture& texture, const std::string& path);
 
 	// Note: The face format in the obj file must be triangular
-	static Mesh loadMeshOBJ(const std::string& path, glm::vec3 offset = glm::vec3(0.0f));
+	static MeshData loadMeshOBJ(const std::string& path, glm::vec3 offset = glm::vec3(0.0f));
+	static TetrahedralMeshData loadTetrahedralMeshOBJ(const std::string& path, glm::vec3 offset = glm::vec3(0.0f));
 };
 

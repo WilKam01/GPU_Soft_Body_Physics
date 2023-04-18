@@ -5,7 +5,7 @@
 
 struct PipelineSettings
 {
-	bool wireframe;
+	VkPolygonMode polygonMode;
 	bool backfaceCulling;
 	bool depthTesting;
 };
@@ -40,22 +40,19 @@ public:
 	void initGraphics(
 		Device& device,
 		PipelineLayout& layout,
-		DescriptorSet* descriptorSet,
 		VkRenderPass renderPass,
 		const std::string& vertexShaderPath,
 		const std::string& fragmentShaderPath,
-		PipelineSettings settings
+		PipelineSettings settings,
+		VertexStreamInput inputStreams
 	);
 	void initCompute(
 		Device& device,
 		PipelineLayout& layout,
-		DescriptorSet* descriptorSet,
 		const std::string& shaderPath
 	);
 
 	void cleanup();
-
-
 
 	inline VkPipeline get() { return m_pipeline; }
 };
