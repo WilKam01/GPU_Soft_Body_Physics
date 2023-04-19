@@ -1,0 +1,30 @@
+#version 450
+
+layout(set = 0, binding = 0) uniform UBO
+{
+    float deltaTime;
+} ubo;
+
+struct Particle
+{
+    vec4 position;
+    vec4 velocity;
+};
+
+layout(std140, set = 0, binding = 1) buffer ParticlesSSBO
+{
+	Particle particles[];
+};
+
+layout(std140, set = 0, binding = 2) buffer PositionsSSBO
+{
+	vec4 positions[];
+};
+
+layout(local_size_x = 1) in;
+
+void main()
+{
+	uint index = gl_GlobalInvocationID.x;
+	particles[index].velocity = (positions[index] - particles[index].position) / ubo.deltaTime;
+}

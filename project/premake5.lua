@@ -55,7 +55,7 @@ project "project"
     local function compile_shaders()
         commands = {}
         for _, file in ipairs(os.matchfiles("shaders/**")) do
-            table.insert(commands, "glslangValidator -V -o assets/spv/" .. string.gsub(file, "shaders/", "") .. ".spv " .. file)
+            table.insert(commands, "glslangValidator -V -o assets/spv/" .. string.sub(file, string.find(file, "/[^/]*$") + 1) .. ".spv " .. file)
         end
         return commands
     end

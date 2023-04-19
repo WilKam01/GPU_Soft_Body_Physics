@@ -54,10 +54,11 @@ private:
 	DescriptorSetLayout m_tetDescriptorSetLayout;
 	DescriptorSet m_tetDescriptorSet;
 
-	PipelineLayout m_computePipelineLayout;
-	Pipeline m_computePipeline;
-	DescriptorSetLayout m_computeDescriptorSetLayout;
-	DescriptorSet m_computeDescriptorSet;
+	PipelineLayout m_pbdPipelineLayout;
+	Pipeline m_presolvePipeline;
+	Pipeline m_postsolvePipeline;
+	DescriptorSetLayout m_pbdDescriptorSetLayout;
+	DescriptorSet m_pbdDescriptorSet;
 
 	Texture m_texture;
 	Sampler m_sampler;

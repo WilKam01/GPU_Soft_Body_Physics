@@ -359,3 +359,4 @@ MigrationBackup/
 *.spv
 **/imgui.ini
 !**/models/*.obj
+screenshots/**

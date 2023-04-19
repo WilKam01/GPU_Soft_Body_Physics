@@ -3,12 +3,25 @@
 #include "graphics/Buffer.h"
 #include "graphics/CommandPool.h"
 
+struct Particle
+{
+	glm::vec4 position;
+	glm::vec4 velocity;
+};
+
+struct Edge
+{
+	glm::uvec2 indices;
+	float restLen;
+	float pad;
+};
+
 struct TetrahedralMeshData
 {
-	std::vector<glm::vec4> positions;
+	std::vector<Particle> particles;
 	std::vector<glm::uvec4> tetIds;
-	//std::vector<glm::ivec2> edges;
-	std::vector<uint32_t> surfaceIndices;
+	std::vector<Edge> edges;
+	//std::vector<uint32_t> surfaceIndices;
 };
 
 class TetrahedralMesh
@@ -17,13 +30,15 @@ private:
 	Device* p_device;
 	const TetrahedralMeshData* p_meshData;
 
-	Buffer m_positionBuffer;
+	Buffer m_particleBuffer;
 	Buffer m_tetIdBuffer;
-	Buffer m_indexBuffer;
+	Buffer m_edgeBuffer;
+	Buffer m_predictPosBuffer;
+	//Buffer m_indexBuffer;
 
-	uint32_t m_vertexCount;
+	uint32_t m_particleCount;
 	uint32_t m_tetCount;
-	uint32_t m_indexCount;
+	//uint32_t m_indexCount;
 
 public:
 	void bindGraphics();
@@ -31,7 +46,10 @@ public:
 	void init(Device& device, CommandPool& commandPool, const TetrahedralMeshData& meshData);
 	void cleanup();
 
-	inline Buffer& getPositionBuffer() { return m_positionBuffer; }
+	inline Buffer& getParticleBuffer() { return m_particleBuffer; }
 	inline Buffer& getTetIdBuffer() { return m_tetIdBuffer; }
+	inline Buffer& getPredictPosBuffer() { return m_predictPosBuffer; }
+
+	inline uint32_t getParticleCount() { return m_particleCount; }
 	inline uint32_t getTetCount() { return m_tetCount; }
 };

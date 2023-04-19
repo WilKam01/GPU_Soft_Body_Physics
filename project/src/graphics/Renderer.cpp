@@ -24,16 +24,16 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
 
-    m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_meshDescriptorSet.get(0)});
+    /*m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_meshDescriptorSet.get(0)});
     m_mesh.bind(commandBuffer);
-    vkCmdDrawIndexed(commandBuffer, m_mesh.getIndexCount(), 1, 0, 0, 0);
+    vkCmdDrawIndexed(commandBuffer, m_mesh.getIndexCount(), 1, 0, 0, 0);*/
 
     m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_floorDescriptorSet.get(0) });
     m_floorMesh.bind(commandBuffer);
     vkCmdDrawIndexed(commandBuffer, m_floorMesh.getIndexCount(), 1, 0, 0, 0);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_tetPipeline.get());
-    m_tetPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_tetDescriptorSet.get(0) });
+    m_tetPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_meshDescriptorSet.get(0), m_tetDescriptorSet.get(0) });
     vkCmdDraw(commandBuffer, 12, m_tetMesh.getTetCount(), 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
@@ -53,10 +53,29 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 
 void Renderer::recordCommandBufferCompute(VkCommandBuffer commandBuffer)
 {
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_computePipeline.get());
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_computePipelineLayout.get(), 0, 1, &m_computeDescriptorSet.get(currentFrame), 0, 0);
+    VkMemoryBarrier memoryBarrier = {};
+    memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-    vkCmdDispatch(commandBuffer, m_mesh.getVertexCount(), 1, 1);
+    m_pbdPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, { m_pbdDescriptorSet.get(currentFrame) });
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_presolvePipeline.get());
+    vkCmdDispatch(commandBuffer, m_tetMesh.getParticleCount(), 1, 1);
+
+    vkCmdPipelineBarrier(commandBuffer,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        0,
+        1,
+        &memoryBarrier,
+        0,
+        nullptr,
+        0,
+        nullptr);
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_postsolvePipeline.get());
+    vkCmdDispatch(commandBuffer, m_tetMesh.getParticleCount(), 1, 1);
 }
 
 void Renderer::createSyncObjects()
@@ -89,21 +108,21 @@ void Renderer::createSyncObjects()
 
 void Renderer::createResources()
 {
-    MeshData mesh = ResourceManager::loadMeshOBJ("assets/models/icosphere50.obj", glm::vec3(0.0f, 1.0f, 0.0f));
+    MeshData mesh = ResourceManager::loadMeshOBJ("assets/models/bunny.obj", glm::vec3(0.0f, 1.0f, 0.0f));
     m_mesh.init(m_device, m_commandPool, mesh);
 
-    TetrahedralMeshData tetMesh = ResourceManager::loadTetrahedralMeshOBJ("assets/models/icosphereTet.obj", glm::vec3(0.0f, 1.0f, 0.0f));
+    TetrahedralMeshData tetMesh = ResourceManager::loadTetrahedralMeshOBJ("assets/tet_models/bunnyTet.obj", glm::vec3(0.0f, 5.0f, 0.0f));
     /*TetrahedralMeshData tetMesh = {
         {
-            glm::vec4(1.0f, 1.0f, 1.0f, 1.0f),
-            glm::vec4(-1.0f, 1.0f, -1.0f, 1.0f),
-            glm::vec4(-1.0f, 1.0f, 1.0f, 1.0f),
-            glm::vec4(1.0f, 1.0f, -1.0f, 1.0f),
-            glm::vec4(1.0f, -1.0f, 1.0f, 1.0f),
-            glm::vec4(-1.0f, -1.0f, -1.0f, 1.0f),
-            glm::vec4(-1.0f, -1.0f, 1.0f, 1.0f),
-            glm::vec4(1.0f, -1.0f, -1.0f, 1.0f),
-            glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
+            { glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) },
+            { glm::vec4(-1.0f, 1.0f, -1.0f, 1.0f) },
+            { glm::vec4(-1.0f, 1.0f, 1.0f, 1.0f) },
+            { glm::vec4(1.0f, 1.0f, -1.0f, 1.0f) },
+            { glm::vec4(1.0f, -1.0f, 1.0f, 1.0f) },
+            { glm::vec4(-1.0f, -1.0f, -1.0f, 1.0f) },
+            { glm::vec4(-1.0f, -1.0f, 1.0f, 1.0f) },
+            { glm::vec4(1.0f, -1.0f, -1.0f, 1.0f) },
+            { glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) }
         },
         {
             glm::uvec4(0, 3, 4, 8),
@@ -196,12 +215,31 @@ void Renderer::renderImGui()
 
     //------------------------------------------
 
+    ImGui::Begin("Stats");
+
+    ImGui::Text("runtime: %.3f s", m_timer.getTotal());
+    ImGui::Text("delta: %.4f ms", m_timer.getDT());
+    ImGui::Text("FPS: %.3f", 1.0f / m_timer.getDT());
+
+    ImGui::End();
+
     ImGui::Begin("Copy image");
 
     if (ImGui::Button("Copy!"))
     {
         Texture texture = m_swapChain.copyImage(currentFrame, m_commandPool);
-        ResourceManager::exportJPG(texture, "../screenshot.jpg");
+        std::ifstream stream;
+        for (int i = 0; i < 100; i++)
+        {
+            stream.open("../screenshots/" + std::to_string(i) + ".jpg");
+            if (stream.is_open())
+                stream.close();
+            else
+            {
+                ResourceManager::exportJPG(texture, "../screenshots/" + std::to_string(i) + ".jpg");
+                break;
+            }
+        }
         texture.cleanup();
     }
 
@@ -244,7 +282,7 @@ void Renderer::init(Window& window)
 	m_device.init(m_instance, m_surface);
 	m_swapChain.init(m_device, m_surface, window);
 
-    m_camera.init(glm::vec3(0.0f, 2.0f, 3.0f), glm::vec3(-30.0f, 0.0f, 0.0f), 90.0f, m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height);
+    m_camera.init(glm::vec3(0.0f, 5.0f, 6.0f), glm::vec3(-30.0f, 0.0f, 0.0f), 90.0f, m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height);
 
     currentFrame = 0;
     GraphicsUBO graphics{};
@@ -297,32 +335,37 @@ void Renderer::init(Window& window)
             { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT }
         },
         {
+            { 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT }
+        },
+        {
             { 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT },
             { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT }
         }
     });
-    m_tetDescriptorSet.init(m_device, m_tetDescriptorSetLayout, 1);
+    m_tetDescriptorSet.init(m_device, m_tetDescriptorSetLayout, 2);
     m_tetPipelineLayout.init(m_device, &m_tetDescriptorSetLayout);
     m_tetPipeline.initGraphics(
         m_device,
         m_tetPipelineLayout,
         m_swapChain.getRenderPass(),
         "assets/spv/tetrahedral.vert.spv",
-        "assets/spv/simple.frag.spv",
-        { VK_POLYGON_MODE_LINE, false, false },
+        "assets/spv/shader.frag.spv",
+        { VK_POLYGON_MODE_LINE, true, true},
         VERTEX_STREAM_INPUT_NONE
     );
 
-    m_computeDescriptorSetLayout.init(m_device,
+    m_pbdDescriptorSetLayout.init(m_device,
     {
         {
             { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
-            { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
+            { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
         }
     });
-    m_computeDescriptorSet.init(m_device, m_computeDescriptorSetLayout, 0, MAX_FRAMES_IN_FLIGHT);
-    m_computePipelineLayout.init(m_device, &m_computeDescriptorSetLayout);
-    m_computePipeline.initCompute(m_device, m_computePipelineLayout, "assets/spv/shader.comp.spv");
+    m_pbdDescriptorSet.init(m_device, m_pbdDescriptorSetLayout, 0, MAX_FRAMES_IN_FLIGHT);
+    m_pbdPipelineLayout.init(m_device, &m_pbdDescriptorSetLayout);
+    m_presolvePipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/presolve.comp.spv");
+    m_postsolvePipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/postsolve.comp.spv");
 
     m_graphicsUBO.resize(MAX_FRAMES_IN_FLIGHT);
     m_deltaTimeUBO.resize(MAX_FRAMES_IN_FLIGHT);
@@ -348,15 +391,19 @@ void Renderer::init(Window& window)
     m_meshDescriptorSet.writeTexture(0, 0, m_texture, m_sampler);
     m_floorDescriptorSet.writeTexture(0, 0, m_floorTexture, m_sampler);
 
-    m_tetDescriptorSet.writeBuffer(0, 0, m_tetMesh.getPositionBuffer(), m_tetMesh.getPositionBuffer().getSize());
+    m_tetDescriptorSet.writeBuffer(0, 0, m_tetMesh.getParticleBuffer(), m_tetMesh.getParticleBuffer().getSize());
     m_tetDescriptorSet.writeBuffer(0, 1, m_tetMesh.getTetIdBuffer(), m_tetMesh.getTetIdBuffer().getSize());
+
+    m_pbdDescriptorSet.writeBuffer(0, 1, m_tetMesh.getParticleBuffer(), m_tetMesh.getParticleBuffer().getSize());
+    m_pbdDescriptorSet.writeBuffer(0, 2, m_tetMesh.getPredictPosBuffer(), m_tetMesh.getPredictPosBuffer().getSize());
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         m_graphicsDescriptorSet.writeBuffer(i, 0, m_graphicsUBO[i], m_graphicsUBO[i].size());
 
-        m_computeDescriptorSet.writeBuffer(i, 0, m_deltaTimeUBO[i], m_deltaTimeUBO[i].size());
-        //m_computeDescriptorSet.writeBuffer(i, 1, m_mesh.getVertexBuffer(0), m_mesh.getVertexBuffer(0).getSize());
+        m_pbdDescriptorSet.writeBuffer(i, 0, m_deltaTimeUBO[i], m_deltaTimeUBO[i].size());
+        m_pbdDescriptorSet.writeBuffer(i, 1, m_tetMesh.getParticleBuffer(), m_tetMesh.getParticleBuffer().getSize());
+        m_pbdDescriptorSet.writeBuffer(i, 2, m_tetMesh.getPredictPosBuffer(), m_tetMesh.getPredictPosBuffer().getSize());
     }
 
     m_timer.init();
@@ -399,11 +446,12 @@ void Renderer::cleanup()
         m_deltaTimeUBO[i].cleanup();
     }
 
-    m_computePipeline.cleanup();
-    m_computePipelineLayout.cleanup();
+    m_postsolvePipeline.cleanup();
+    m_presolvePipeline.cleanup();
+    m_pbdPipelineLayout.cleanup();
 
-    m_computeDescriptorSet.cleanup();
-    m_computeDescriptorSetLayout.cleanup();
+    m_pbdDescriptorSet.cleanup();
+    m_pbdDescriptorSetLayout.cleanup();
 
     m_tetPipeline.cleanup();
     m_tetPipelineLayout.cleanup();
@@ -438,7 +486,7 @@ void Renderer::render()
     vkResetFences(device, 1, &m_computeInFlightFences[currentFrame]);
 
     m_computeCommandBufferArray.begin(currentFrame);
-    //recordCommandBufferCompute(m_computeCommandBufferArray[currentFrame]);
+    recordCommandBufferCompute(m_computeCommandBufferArray[currentFrame]);
     m_computeCommandBufferArray.end(currentFrame);
 
     m_deltaTimeUBO[currentFrame].get() = m_timer.getDT();
