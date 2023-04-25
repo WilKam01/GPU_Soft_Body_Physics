@@ -1,33 +1,23 @@
 #version 450
 
-layout(binding = 0) uniform UBO
+layout(std140, set = 0, binding = 0) buffer VertexPositionsSSBO
 {
-    float deltaTime;
-} ubo;
-
-struct Vertex 
+	vec4 vertexPositions[];
+};
+layout(std140, set = 0, binding = 1) buffer VertexNormalsSSBO
 {
-	vec3 pos;
-	float pad0;
-	vec3 color;
-	float pad1;
+	vec4 vertexNormals[];
 };
 
-layout(std140, binding = 1) buffer VerticesSSBO
+layout(std140, set = 0, binding = 2) buffer TetPositionsSSBO
 {
-	Vertex vertices[];
+	vec4 tetpositions[];
 };
 
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 1) in;
 
 void main()
 {
 	uint index = gl_GlobalInvocationID.x;
-	Vertex vertex = vertices[index];
-	float angle = 0.5 * ubo.deltaTime;
-	vertices[index].pos = vec3(
-		cos(angle) * vertex.pos.x - sin(angle) * vertex.pos.y,
-		sin(angle) * vertex.pos.x + cos(angle) * vertex.pos.y,
-		vertex.pos.z
-	);
+	vertexPositions[index] = tetpositions[index];
 }

@@ -21,10 +21,16 @@ layout(std140, set = 0, binding = 2) buffer PositionsSSBO
 	vec4 positions[];
 };
 
+layout(std140, set = 0, binding = 3) buffer DeltaPositionsSSBO
+{
+	vec4 dtPositions[];
+};
+
 layout(local_size_x = 1) in;
 
 void main()
 {
 	uint index = gl_GlobalInvocationID.x;
+	positions[index] += dtPositions[index];
 	particles[index].velocity = (positions[index] - particles[index].position) / ubo.deltaTime;
 }

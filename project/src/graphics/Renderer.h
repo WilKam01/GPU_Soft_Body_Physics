@@ -27,6 +27,21 @@ struct GraphicsUBO
 	glm::vec4 globalAmbient;
 };
 
+struct PbdUBO
+{
+	float deltaTime;
+	float edgeCompliance;
+	float volumeCompliance;
+};
+
+struct SoftBody
+{
+	Mesh mesh;
+	TetrahedralMesh tetMesh;
+	DescriptorSet descriptorSet;
+	bool useSkinning = false;
+};
+
 class Renderer
 {
 public:
@@ -56,14 +71,18 @@ private:
 
 	PipelineLayout m_pbdPipelineLayout;
 	Pipeline m_presolvePipeline;
+	Pipeline m_distanceConstraintPipeline;
 	Pipeline m_postsolvePipeline;
 	DescriptorSetLayout m_pbdDescriptorSetLayout;
 	DescriptorSet m_pbdDescriptorSet;
 
+	PipelineLayout m_deformPipelineLayout;
+	DescriptorSetLayout m_deformDescriptorSetLayout;
+	Pipeline m_deformPipeline;
+
 	Texture m_texture;
 	Sampler m_sampler;
-	Mesh m_mesh;
-	TetrahedralMesh m_tetMesh;
+	SoftBody m_softBody;
 
 	Texture m_floorTexture;
 	Mesh m_floorMesh;
@@ -77,7 +96,7 @@ private:
 	CommandBufferArray m_computeCommandBufferArray;
 
 	std::vector<UniformBuffer<GraphicsUBO>> m_graphicsUBO;
-	std::vector<UniformBuffer<float>> m_deltaTimeUBO;
+	UniformBuffer<PbdUBO> m_pbdUBO;
 
 	std::vector<VkSemaphore> m_imageAvailableSemaphores;
 	std::vector<VkSemaphore> m_renderFinishedSemaphores;
@@ -89,10 +108,11 @@ private:
 	ImGuiRenderer m_imGuiRenderer;
 
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-	void recordCommandBufferCompute(VkCommandBuffer commandBuffer);
+	void computePhysics(VkCommandBuffer commandBuffer);
 	void createSyncObjects();
 
 	void createResources();
+	SoftBody createSoftBody(const std::string& name, glm::vec3 offset);
 
 	void recreateSwapChain();
 	void renderImGui();

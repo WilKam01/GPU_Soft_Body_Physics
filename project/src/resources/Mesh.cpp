@@ -1,16 +1,16 @@
 #include "pch.h"
 #include "Mesh.h"
 
-void Mesh::init(Device& device, CommandPool& commandPool, const MeshData& meshData)
+void Mesh::init(Device& device, CommandPool& commandPool, MeshData& meshData)
 {
     p_device = &device;
-    p_meshData = &meshData;
+    m_meshData = meshData;
     m_vertexCount = (uint32_t)meshData.vertices.positions.size();
     m_indexCount = (uint32_t)meshData.indices.size();
 
     // Vertex buffers
-    addVertexBuffer<glm::vec3>(commandPool, meshData.vertices.positions);
-    addVertexBuffer<glm::vec3>(commandPool, meshData.vertices.normals);
+    addVertexBuffer<glm::vec4>(commandPool, meshData.vertices.positions, true);
+    addVertexBuffer<glm::vec3>(commandPool, meshData.vertices.normals, true);
     addVertexBuffer<glm::vec2>(commandPool, meshData.vertices.uvs);
 
     // Index buffer
@@ -30,7 +30,6 @@ void Mesh::init(Device& device, CommandPool& commandPool, const MeshData& meshDa
     );
 
     commandPool.copyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
-
     stagingBuffer.cleanup();
 
     m_bufferCount = (uint32_t)m_vertexBuffers.size();

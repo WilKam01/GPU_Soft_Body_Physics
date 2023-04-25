@@ -46,7 +46,7 @@ public:
 	void init(Device& device, DescriptorSetLayout& layout, uint32_t set, uint32_t count = 1);
 	void cleanup();
 
-	void writeBuffer(size_t i, uint32_t binding, Buffer& buffer, VkDeviceSize range, VkDeviceSize offset = 0);
+	void writeBuffer(size_t i, uint32_t binding, Buffer& buffer, VkDeviceSize range = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
 	void writeTexture(size_t i, uint32_t binding, Texture& texture, Sampler& sampler);
 
 	VkDescriptorSet& get(size_t i) { return m_descriptorSet[i]; }

@@ -1,0 +1,63 @@
+#version 450
+#extension GL_EXT_shader_atomic_float : enable
+
+layout(set = 0, binding = 0) uniform UBO
+{
+    float deltaTime;
+	float distanceCompliance;
+	float volumeCompliance;
+} ubo;
+
+struct Particle
+{
+    vec4 position;
+    vec4 velocity;
+};
+
+layout(std140, set = 0, binding = 1) buffer ParticlesSSBO
+{
+	Particle particles[];
+};
+
+layout(std140, set = 0, binding = 2) buffer PositionsSSBO
+{
+	vec4 positions[];
+};
+
+layout(std140, set = 0, binding = 3) buffer DeltaPositionsSSBO
+{
+	vec4 dtPositions[];
+};
+
+struct Edge
+{
+	uvec2 indices;
+	float restLen;
+	float pad;
+};
+
+layout(std140, set = 0, binding = 4) buffer EdgesSSBO
+{
+	Edge edges[];
+};
+
+layout(local_size_x = 1) in;
+
+void main()
+{
+	float alpha = ubo.distanceCompliance / ubo.deltaTime / ubo.deltaTime;
+	uint index = gl_GlobalInvocationID.x;
+	
+	vec3 diff = positions[edges[index].indices[0]].xyz - positions[edges[index].indices[1]].xyz;
+	float len = length(diff);
+	float gradient = len - edges[index].restLen;
+	float w = 2; // Sum of inverse masses, currently all masses are the same or '1'
+
+	float correction = -gradient / (w + alpha);
+	vec3 corrVec = correction * diff;
+	for(int i = 0; i < 3; i++)
+	{
+		atomicAdd(dtPositions[edges[index].indices[0]][i], corrVec[i]);
+		atomicAdd(dtPositions[edges[index].indices[1]][i], -corrVec[i]);
+	}
+}

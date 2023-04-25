@@ -14,7 +14,7 @@ enum VertexStreamInput
 
 struct VertexStream
 {
-	std::vector<glm::vec3> positions;
+	std::vector<glm::vec4> positions;
 	std::vector<glm::vec3> normals;
 	std::vector<glm::vec2> uvs;
 };
@@ -33,7 +33,7 @@ class Mesh
 {
 private:
 	Device* p_device;
-	const MeshData* p_meshData;
+	MeshData m_meshData;
 
 	std::vector<Buffer> m_vertexBuffers;
 	Buffer m_indexBuffer;
@@ -45,9 +45,9 @@ private:
 	uint32_t m_bufferCount;
 
 	template <typename T>
-	void addVertexBuffer(CommandPool& commandPool, std::vector<T> stream, bool isSBO = false);
+	void addVertexBuffer(CommandPool& commandPool, const std::vector<T>& stream, bool isSBO = false);
 public:
-	void init(Device& device, CommandPool& commandPool, const MeshData& meshData);
+	void init(Device& device, CommandPool& commandPool, MeshData& meshData);
 	void cleanup();
 
 	void bind(VkCommandBuffer commandBuffer);
@@ -59,7 +59,7 @@ public:
 };
 
 template<typename T>
-inline void Mesh::addVertexBuffer(CommandPool& commandPool, std::vector<T> stream, bool isSBO)
+inline void Mesh::addVertexBuffer(CommandPool& commandPool, const std::vector<T>& stream, bool isSBO)
 {
 	if (stream.size() == 0)
 		return;

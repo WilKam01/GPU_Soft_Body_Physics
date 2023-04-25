@@ -40,7 +40,18 @@ bool Device::isDeviceSuitable(VkPhysicalDevice device)
 	VkPhysicalDeviceFeatures supportedFeatures;
 	vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
 
-	return indices.isComplete() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy && supportedFeatures.fillModeNonSolid;
+	VkPhysicalDeviceFeatures2 supportedFeatures2{};
+	supportedFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+
+	VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
+	atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
+	atomicFeatures.pNext = NULL;
+
+	supportedFeatures2.pNext = &atomicFeatures;
+	vkGetPhysicalDeviceFeatures2(device, &supportedFeatures2);
+	bool atomicOperationsSupported = atomicFeatures.shaderBufferFloat32AtomicAdd && atomicFeatures.shaderBufferFloat32Atomics;
+
+	return indices.isComplete() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy && supportedFeatures.fillModeNonSolid && atomicOperationsSupported;
 }
 
 QueueFamilyIndices Device::findQueueFamilies(VkPhysicalDevice device)
@@ -107,16 +118,24 @@ void Device::createLogicalDevice(Instance& instance)
 		queueCreateInfos.push_back(queueCreateInfo);
 	}
 
-	VkPhysicalDeviceFeatures deviceFeatures{};
-	deviceFeatures.samplerAnisotropy = VK_TRUE;
-	deviceFeatures.sampleRateShading = VK_TRUE;
-	deviceFeatures.fillModeNonSolid = VK_TRUE;
+	VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures = {};
+	atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
+	atomicFeatures.shaderBufferFloat32AtomicAdd = VK_TRUE;
+	atomicFeatures.shaderBufferFloat32Atomics = VK_TRUE;
+
+	VkPhysicalDeviceFeatures2 deviceFeatures{};
+	deviceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	deviceFeatures.pNext = &atomicFeatures;
+	deviceFeatures.features.samplerAnisotropy = VK_TRUE;
+	deviceFeatures.features.sampleRateShading = VK_TRUE;
+	deviceFeatures.features.fillModeNonSolid = VK_TRUE;
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	createInfo.pNext = &deviceFeatures;
 	createInfo.queueCreateInfoCount = (uint32_t)(queueCreateInfos.size());
 	createInfo.pQueueCreateInfos = queueCreateInfos.data();
-	createInfo.pEnabledFeatures = &deviceFeatures;
+	createInfo.pEnabledFeatures = nullptr;
 	createInfo.enabledExtensionCount = (uint32_t)(c_deviceExtensions.size());
 	createInfo.ppEnabledExtensionNames = c_deviceExtensions.data();
 

@@ -72,11 +72,12 @@ MeshData ResourceManager::loadMeshOBJ(const std::string& path, glm::vec3 offset)
         if (!uniqueVertices.count(key))
         {
             uniqueVertices[key] = static_cast<uint32_t>(mesh.vertices.positions.size());
-            mesh.vertices.positions.push_back(glm::vec3(
+            mesh.vertices.positions.push_back(glm::vec4(
                 obj->positions[obj->indices[i].p * 3],
                 obj->positions[obj->indices[i].p * 3 + 1],
-                obj->positions[obj->indices[i].p * 3 + 2]
-            ) + offset);
+                obj->positions[obj->indices[i].p * 3 + 2],
+                0.0f
+            ) + glm::vec4(offset, 0.0f));
             mesh.vertices.normals.push_back(glm::vec3(
                 obj->normals[obj->indices[i].n * 3],
                 obj->normals[obj->indices[i].n * 3 + 1],

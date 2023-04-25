@@ -24,17 +24,17 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
 
-    /*m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_meshDescriptorSet.get(0)});
-    m_mesh.bind(commandBuffer);
-    vkCmdDrawIndexed(commandBuffer, m_mesh.getIndexCount(), 1, 0, 0, 0);*/
+    m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_meshDescriptorSet.get(0)});
+    m_softBody.mesh.bind(commandBuffer);
+    vkCmdDrawIndexed(commandBuffer, m_softBody.mesh.getIndexCount(), 1, 0, 0, 0);
 
     m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_floorDescriptorSet.get(0) });
     m_floorMesh.bind(commandBuffer);
     vkCmdDrawIndexed(commandBuffer, m_floorMesh.getIndexCount(), 1, 0, 0, 0);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_tetPipeline.get());
-    m_tetPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_meshDescriptorSet.get(0), m_tetDescriptorSet.get(0) });
-    vkCmdDraw(commandBuffer, 12, m_tetMesh.getTetCount(), 0, 0);
+    m_tetPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_tetDescriptorSet.get(0) });
+    vkCmdDraw(commandBuffer, 12, m_softBody.tetMesh.getTetCount(), 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
 
@@ -51,17 +51,31 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdEndRenderPass(commandBuffer);
 }
 
-void Renderer::recordCommandBufferCompute(VkCommandBuffer commandBuffer)
+void Renderer::computePhysics(VkCommandBuffer commandBuffer)
 {
     VkMemoryBarrier memoryBarrier = {};
     memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
     memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-    m_pbdPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, { m_pbdDescriptorSet.get(currentFrame) });
+    m_pbdPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, { m_pbdDescriptorSet.get(0) });
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_presolvePipeline.get());
-    vkCmdDispatch(commandBuffer, m_tetMesh.getParticleCount(), 1, 1);
+    vkCmdDispatch(commandBuffer, m_softBody.tetMesh.getParticleCount(), 1, 1);
+
+    vkCmdPipelineBarrier(commandBuffer,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        0,
+        1,
+        &memoryBarrier,
+        0,
+        nullptr,
+        0,
+        nullptr);
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_distanceConstraintPipeline.get());
+    vkCmdDispatch(commandBuffer, m_softBody.tetMesh.getEdgeCount(), 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -75,7 +89,22 @@ void Renderer::recordCommandBufferCompute(VkCommandBuffer commandBuffer)
         nullptr);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_postsolvePipeline.get());
-    vkCmdDispatch(commandBuffer, m_tetMesh.getParticleCount(), 1, 1);
+    vkCmdDispatch(commandBuffer, m_softBody.tetMesh.getParticleCount(), 1, 1);
+
+    /*vkCmdPipelineBarrier(commandBuffer,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        0,
+        1,
+        &memoryBarrier,
+        0,
+        nullptr,
+        0,
+        nullptr);
+
+    m_deformPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, { m_softBody.descriptorSet.get(0) });
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_deformPipeline.get());
+    vkCmdDispatch(commandBuffer, m_softBody.mesh.getVertexCount(), 1, 1);*/
 }
 
 void Renderer::createSyncObjects()
@@ -108,11 +137,13 @@ void Renderer::createSyncObjects()
 
 void Renderer::createResources()
 {
-    MeshData mesh = ResourceManager::loadMeshOBJ("assets/models/bunny.obj", glm::vec3(0.0f, 1.0f, 0.0f));
+    m_softBody = createSoftBody("bunny", glm::vec3(0.0f, 5.0f, 0.0f));
+
+    /*MeshData mesh = ResourceManager::loadMeshOBJ("assets/models/bunny.obj", glm::vec3(0.0f, 1.0f, 0.0f));
     m_mesh.init(m_device, m_commandPool, mesh);
 
     TetrahedralMeshData tetMesh = ResourceManager::loadTetrahedralMeshOBJ("assets/tet_models/bunnyTet.obj", glm::vec3(0.0f, 5.0f, 0.0f));
-    /*TetrahedralMeshData tetMesh = {
+    TetrahedralMeshData tetMesh = {
         {
             { glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) },
             { glm::vec4(-1.0f, 1.0f, -1.0f, 1.0f) },
@@ -138,8 +169,8 @@ void Renderer::createResources()
             glm::uvec4(4, 7, 6, 8),
             glm::uvec4(5, 6, 7, 8)
         }
-    };*/
-    m_tetMesh.init(m_device, m_commandPool, tetMesh);
+    };
+    m_tetMesh.init(m_device, m_commandPool, tetMesh);*/
 
     static uint8_t pixel[4] = { 25, 25, 205, 255 };
     m_texture.init(m_device, m_commandPool, &pixel, glm::uvec2(1, 1));
@@ -150,10 +181,10 @@ void Renderer::createResources()
     static VertexStream floorVertices
     {
         {
-            glm::vec3(1.0f, 0.0f, 1.0f) * scale,
-            glm::vec3(-1.0f, 0.0f, -1.0f) * scale,
-            glm::vec3(-1.0f, 0.0f, 1.0f) * scale,
-            glm::vec3(1.0f, 0.0f, -1.0f) * scale
+            glm::vec4(1.0f, 0.0f, 1.0f, 0.0f) * scale,
+            glm::vec4(-1.0f, 0.0f, -1.0f, 0.0f) * scale,
+            glm::vec4(-1.0f, 0.0f, 1.0f, 0.0f) * scale,
+            glm::vec4(1.0f, 0.0f, -1.0f, 0.0f) * scale
         },
         {
             glm::vec3(0.0f, 1.0f, 0.0f),
@@ -175,8 +206,25 @@ void Renderer::createResources()
         0, 3, 1,
     };
 
-    m_floorMesh.init(m_device, m_commandPool, { floorVertices, floorIndices });
+    MeshData floorMeshData = { floorVertices, floorIndices };
+    m_floorMesh.init(m_device, m_commandPool, floorMeshData);
     m_floorTexture = ResourceManager::loadTexture("assets/textures/check.jpg");
+}
+
+SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset)
+{
+    SoftBody softBody;
+    MeshData mesh = ResourceManager::loadMeshOBJ("assets/models/" + name + ".obj", offset);
+    TetrahedralMeshData tetMesh = ResourceManager::loadTetrahedralMeshOBJ("assets/tet_models/" + name + ".obj", offset);
+
+    softBody.mesh.init(m_device, m_commandPool, mesh);
+    softBody.tetMesh.init(m_device, m_commandPool, tetMesh);
+    softBody.descriptorSet.init(m_device, m_deformDescriptorSetLayout, 0);
+    softBody.descriptorSet.writeBuffer(0, 0, softBody.mesh.getVertexBuffer(0));
+    softBody.descriptorSet.writeBuffer(0, 1, softBody.mesh.getVertexBuffer(1));
+    softBody.descriptorSet.writeBuffer(0, 2, softBody.tetMesh.getPredictPosBuffer());
+
+    return softBody;
 }
 
 void Renderer::recreateSwapChain()
@@ -197,8 +245,7 @@ void Renderer::recreateSwapChain()
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        GraphicsUBO& graphics = m_graphicsUBO[i].get();
-        graphics.viewProj = m_camera.getMatrix();
+        m_graphicsUBO[i].get().viewProj = m_camera.getMatrix();
         m_graphicsUBO[i].update();
     }
 
@@ -220,6 +267,8 @@ void Renderer::renderImGui()
     ImGui::Text("runtime: %.3f s", m_timer.getTotal());
     ImGui::Text("delta: %.4f ms", m_timer.getDT());
     ImGui::Text("FPS: %.3f", 1.0f / m_timer.getDT());
+    if (ImGui::Button("Restart"))
+        m_softBody.tetMesh.reset();
 
     ImGui::End();
 
@@ -335,21 +384,18 @@ void Renderer::init(Window& window)
             { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT }
         },
         {
-            { 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT }
-        },
-        {
             { 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT },
             { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT }
         }
     });
-    m_tetDescriptorSet.init(m_device, m_tetDescriptorSetLayout, 2);
+    m_tetDescriptorSet.init(m_device, m_tetDescriptorSetLayout, 1);
     m_tetPipelineLayout.init(m_device, &m_tetDescriptorSetLayout);
     m_tetPipeline.initGraphics(
         m_device,
         m_tetPipelineLayout,
         m_swapChain.getRenderPass(),
         "assets/spv/tetrahedral.vert.spv",
-        "assets/spv/shader.frag.spv",
+        "assets/spv/simple.frag.spv",
         { VK_POLYGON_MODE_LINE, true, true},
         VERTEX_STREAM_INPUT_NONE
     );
@@ -359,20 +405,33 @@ void Renderer::init(Window& window)
         {
             { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
             { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
+        }
+    });
+    m_pbdDescriptorSet.init(m_device, m_pbdDescriptorSetLayout, 0);
+    m_pbdPipelineLayout.init(m_device, &m_pbdDescriptorSetLayout);
+    m_presolvePipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/presolve.comp.spv");
+    m_distanceConstraintPipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/distance_constraint.comp.spv");
+    m_postsolvePipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/postsolve.comp.spv");
+
+    m_deformDescriptorSetLayout.init(m_device,
+    {
+        {
+            { 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
             { 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
         }
     });
-    m_pbdDescriptorSet.init(m_device, m_pbdDescriptorSetLayout, 0, MAX_FRAMES_IN_FLIGHT);
-    m_pbdPipelineLayout.init(m_device, &m_pbdDescriptorSetLayout);
-    m_presolvePipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/presolve.comp.spv");
-    m_postsolvePipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/postsolve.comp.spv");
+    m_deformPipelineLayout.init(m_device, &m_deformDescriptorSetLayout);
+    m_deformPipeline.initCompute(m_device, m_deformPipelineLayout, "assets/spv/shader.comp.spv");
+    m_pbdUBO.init(m_device, { 1.0f / 60.0f, 100.0f, 100.0f });
 
     m_graphicsUBO.resize(MAX_FRAMES_IN_FLIGHT);
-    m_deltaTimeUBO.resize(MAX_FRAMES_IN_FLIGHT);
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         m_graphicsUBO[i].init(m_device, graphics);
-        m_deltaTimeUBO[i].init(m_device, 0.0f);
     }
 
     m_commandPool.init(m_device, VK_PIPELINE_BIND_POINT_GRAPHICS);
@@ -391,22 +450,21 @@ void Renderer::init(Window& window)
     m_meshDescriptorSet.writeTexture(0, 0, m_texture, m_sampler);
     m_floorDescriptorSet.writeTexture(0, 0, m_floorTexture, m_sampler);
 
-    m_tetDescriptorSet.writeBuffer(0, 0, m_tetMesh.getParticleBuffer(), m_tetMesh.getParticleBuffer().getSize());
-    m_tetDescriptorSet.writeBuffer(0, 1, m_tetMesh.getTetIdBuffer(), m_tetMesh.getTetIdBuffer().getSize());
+    m_tetDescriptorSet.writeBuffer(0, 0, m_softBody.tetMesh.getParticleBuffer());
+    m_tetDescriptorSet.writeBuffer(0, 1, m_softBody.tetMesh.getTetIdBuffer());
 
-    m_pbdDescriptorSet.writeBuffer(0, 1, m_tetMesh.getParticleBuffer(), m_tetMesh.getParticleBuffer().getSize());
-    m_pbdDescriptorSet.writeBuffer(0, 2, m_tetMesh.getPredictPosBuffer(), m_tetMesh.getPredictPosBuffer().getSize());
+    m_pbdDescriptorSet.writeBuffer(0, 0, m_pbdUBO);
+    m_pbdDescriptorSet.writeBuffer(0, 1, m_softBody.tetMesh.getParticleBuffer());
+    m_pbdDescriptorSet.writeBuffer(0, 2, m_softBody.tetMesh.getPredictPosBuffer());
+    m_pbdDescriptorSet.writeBuffer(0, 3, m_softBody.tetMesh.getDeltaPosBuffer());
+    m_pbdDescriptorSet.writeBuffer(0, 4, m_softBody.tetMesh.getEdgeBuffer());
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        m_graphicsDescriptorSet.writeBuffer(i, 0, m_graphicsUBO[i], m_graphicsUBO[i].size());
-
-        m_pbdDescriptorSet.writeBuffer(i, 0, m_deltaTimeUBO[i], m_deltaTimeUBO[i].size());
-        m_pbdDescriptorSet.writeBuffer(i, 1, m_tetMesh.getParticleBuffer(), m_tetMesh.getParticleBuffer().getSize());
-        m_pbdDescriptorSet.writeBuffer(i, 2, m_tetMesh.getPredictPosBuffer(), m_tetMesh.getPredictPosBuffer().getSize());
+        m_graphicsDescriptorSet.writeBuffer(i, 0, m_graphicsUBO[i]);
     }
 
-    m_timer.init();
+    m_timer.init(1.0f / 60.0f);
 }
 
 void Renderer::cleanup()
@@ -421,8 +479,9 @@ void Renderer::cleanup()
 
     m_sampler.cleanup();
     m_texture.cleanup();
-    m_mesh.cleanup();
-    m_tetMesh.cleanup();
+    m_softBody.descriptorSet.cleanup();
+    m_softBody.tetMesh.cleanup();
+    m_softBody.mesh.cleanup();
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
     {
@@ -443,10 +502,15 @@ void Renderer::cleanup()
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         m_graphicsUBO[i].cleanup();
-        m_deltaTimeUBO[i].cleanup();
     }
 
+    m_pbdUBO.cleanup();
+    m_deformPipeline.cleanup();
+    m_deformPipelineLayout.cleanup();
+    m_deformDescriptorSetLayout.cleanup();
+
     m_postsolvePipeline.cleanup();
+    m_distanceConstraintPipeline.cleanup();
     m_presolvePipeline.cleanup();
     m_pbdPipelineLayout.cleanup();
 
@@ -486,11 +550,11 @@ void Renderer::render()
     vkResetFences(device, 1, &m_computeInFlightFences[currentFrame]);
 
     m_computeCommandBufferArray.begin(currentFrame);
-    recordCommandBufferCompute(m_computeCommandBufferArray[currentFrame]);
-    m_computeCommandBufferArray.end(currentFrame);
-
-    m_deltaTimeUBO[currentFrame].get() = m_timer.getDT();
-    m_deltaTimeUBO[currentFrame].update();
+    if (m_timer.passedFixedDT())
+    {
+        computePhysics(m_computeCommandBufferArray[currentFrame]);
+    }
+     m_computeCommandBufferArray.end(currentFrame);
 
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &m_computeCommandBufferArray[currentFrame];
@@ -518,10 +582,6 @@ void Renderer::render()
     m_commandBufferArray.begin(currentFrame);
     recordCommandBuffer(m_commandBufferArray[currentFrame], imageIndex);
     m_commandBufferArray.end(currentFrame);
-
-    //m_camera.setRotation(m_camera.getRotation() + glm::vec3(0.0f, m_timer.getDT() * 75.0f, 0.0f));
-    //m_graphicsUBO[currentFrame].get().viewProj = m_camera.getMatrix();
-    //m_graphicsUBO[currentFrame].update();
 
     // Update and Render additional Platform Windows
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
