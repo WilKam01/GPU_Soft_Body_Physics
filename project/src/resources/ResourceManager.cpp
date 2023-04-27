@@ -122,19 +122,19 @@ TetrahedralMeshData ResourceManager::loadTetrahedralMeshOBJ(const std::string& p
     }
 
     mesh.particles.resize(obj->position_count - 1);
-    mesh.tetIds.resize(obj->index_count / 4);
-    mesh.edges.resize(mesh.tetIds.size() * 6);
+    mesh.tets.resize(obj->index_count / 4);
 
     for (unsigned int i = 1; i < obj->position_count; i++)
     {
-        mesh.particles[i - 1].position = glm::vec4(
+        mesh.particles[i - 1].position = glm::vec3(
             obj->positions[i * 3],
             obj->positions[i * 3 + 1],
-            obj->positions[i * 3 + 2],
-            0.0f
-        ) + glm::vec4(offset, 0.0f);
+            obj->positions[i * 3 + 2]
+        ) + offset;
     }
-    for (int i = 0, len = (int)mesh.tetIds.size(); i < len; i++)
+
+    std::set<std::string> uniqueEdges;
+    for (int i = 0, len = (int)mesh.tets.size(); i < len; i++)
     {
         glm::uvec4 ids(
             obj->indices[4 * i].p - 1,
@@ -142,14 +142,46 @@ TetrahedralMeshData ResourceManager::loadTetrahedralMeshOBJ(const std::string& p
             obj->indices[4 * i + 2].p - 1,
             obj->indices[4 * i + 3].p - 1
         );
-        mesh.tetIds[i] = ids;
+        mesh.tets[i].indices = ids;
 
-        mesh.edges[6 * i + 0] = { glm::uvec2(ids[0], ids[1]), glm::length(mesh.particles[ids[0]].position - mesh.particles[ids[1]].position)};
-        mesh.edges[6 * i + 1] = { glm::uvec2(ids[0], ids[2]), glm::length(mesh.particles[ids[0]].position - mesh.particles[ids[2]].position)};
-        mesh.edges[6 * i + 2] = { glm::uvec2(ids[0], ids[3]), glm::length(mesh.particles[ids[0]].position - mesh.particles[ids[3]].position)};
-        mesh.edges[6 * i + 3] = { glm::uvec2(ids[1], ids[2]), glm::length(mesh.particles[ids[1]].position - mesh.particles[ids[2]].position)};
-        mesh.edges[6 * i + 4] = { glm::uvec2(ids[1], ids[3]), glm::length(mesh.particles[ids[1]].position - mesh.particles[ids[3]].position)};
-        mesh.edges[6 * i + 5] = { glm::uvec2(ids[2], ids[3]), glm::length(mesh.particles[ids[2]].position - mesh.particles[ids[3]].position)};
+        float volume = glm::dot(
+            glm::cross(
+                mesh.particles[ids[1]].position - mesh.particles[ids[0]].position,
+                mesh.particles[ids[2]].position - mesh.particles[ids[0]].position
+            ),
+            mesh.particles[ids[3]].position - mesh.particles[ids[0]].position
+        ) / 6.0f;
+        mesh.tets[i].restVolume = volume;
+
+        if (volume > 0.0f)
+        {
+            float invMass = volume / 4.0f;
+            mesh.particles[ids[0]].invMass += invMass;
+            mesh.particles[ids[1]].invMass += invMass;
+            mesh.particles[ids[2]].invMass += invMass;
+            mesh.particles[ids[3]].invMass += invMass;
+        }
+
+        // Edges
+        for (int j = 0; j < 3; j++)
+        {
+            for (int k = j + 1; k < 4; k++)
+            {
+                glm::uvec2 edge(std::min(ids[j], ids[k]), std::max(ids[j], ids[k]));
+                std::string key = std::to_string(edge[0]) + std::to_string(edge[1]);
+
+                if (!uniqueEdges.count(key))
+                {
+                    mesh.edges.push_back({ edge, glm::length(mesh.particles[edge[0]].position - mesh.particles[edge[1]].position) });
+                    uniqueEdges.insert(key);
+                }
+            }
+        }
+    }
+    for (unsigned int i = 0; i < obj->position_count - 1; i++)
+    {
+        mesh.particles[i].invMass = 1.0f / mesh.particles[i].invMass;
+        //std::cout << "invMass " << i << ": " << mesh.particles[i].invMass << "\n";
     }
 
     fast_obj_destroy(obj);

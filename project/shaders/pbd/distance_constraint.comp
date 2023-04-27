@@ -10,33 +10,34 @@ layout(set = 0, binding = 0) uniform UBO
 
 struct Particle
 {
-    vec4 position;
-    vec4 velocity;
+    vec3 position;
+    vec3 velocity;
+	float invMass;
 };
 
-layout(std140, set = 0, binding = 1) buffer ParticlesSSBO
+layout(std140, set = 1, binding = 0) buffer ParticlesSSBO
 {
 	Particle particles[];
 };
 
-layout(std140, set = 0, binding = 2) buffer PositionsSSBO
+struct PbdPositions
 {
-	vec4 positions[];
+	vec3 predict;
+    vec3 delta;
 };
 
-layout(std140, set = 0, binding = 3) buffer DeltaPositionsSSBO
+layout(std140, set = 1, binding = 1) buffer PositionsSSBO
 {
-	vec4 dtPositions[];
+	PbdPositions positions[];
 };
 
 struct Edge
 {
 	uvec2 indices;
 	float restLen;
-	float pad;
 };
 
-layout(std140, set = 0, binding = 4) buffer EdgesSSBO
+layout(std140, set = 1, binding = 2) buffer EdgesSSBO
 {
 	Edge edges[];
 };
@@ -45,19 +46,32 @@ layout(local_size_x = 1) in;
 
 void main()
 {
-	float alpha = ubo.distanceCompliance / ubo.deltaTime / ubo.deltaTime;
+	float alpha = ubo.distanceCompliance / 100.0 / ubo.deltaTime / ubo.deltaTime;
 	uint index = gl_GlobalInvocationID.x;
+
+	float w = particles[edges[index].indices[0]].invMass + particles[edges[index].indices[1]].invMass;
+	if(w == 0.0)
+		return;
 	
-	vec3 diff = positions[edges[index].indices[0]].xyz - positions[edges[index].indices[1]].xyz;
+	vec3 diff = positions[edges[index].indices[0]].predict - positions[edges[index].indices[1]].predict;
 	float len = length(diff);
-	float gradient = len - edges[index].restLen;
-	float w = 2; // Sum of inverse masses, currently all masses are the same or '1'
+	if(len == 0.0)
+		return;
+
+	diff /= len;
+	float rest = edges[index].restLen;
+	float gradient = len - rest;
 
 	float correction = -gradient / (w + alpha);
-	vec3 corrVec = correction * diff;
+	vec3 corrVec0 = correction * diff * particles[edges[index].indices[0]].invMass;
+	vec3 corrVec1 = -correction * diff * particles[edges[index].indices[1]].invMass;
+
+	//positions[edges[index].indices[0]].delta += corrVec;
+	//positions[edges[index].indices[1]].delta -= corrVec;
+
 	for(int i = 0; i < 3; i++)
 	{
-		atomicAdd(dtPositions[edges[index].indices[0]][i], corrVec[i]);
-		atomicAdd(dtPositions[edges[index].indices[1]][i], -corrVec[i]);
+		atomicAdd(positions[edges[index].indices[0]].delta[i], corrVec0[i]);
+		atomicAdd(positions[edges[index].indices[1]].delta[i], corrVec1[i]);
 	}
 }

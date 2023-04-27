@@ -19,6 +19,7 @@ public:
 	void update();
 	void reset();
 	bool passedFixedDT();
+	void setFixedDT(float fixedDT);
 
 	inline float getDT() { return m_delta; }
 	inline float getTotal() { return m_total; }

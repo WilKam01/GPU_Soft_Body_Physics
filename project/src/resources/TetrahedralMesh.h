@@ -5,23 +5,28 @@
 
 struct Particle
 {
-	glm::vec4 position;
-	glm::vec4 velocity;
+	alignas(16) glm::vec3 position;
+	alignas(16) glm::vec3 velocity;
+	alignas(4) float invMass;
 };
 
 struct Edge
 {
-	glm::uvec2 indices;
-	float restLen;
-	float pad;
+	alignas(16) glm::uvec2 indices;
+	alignas(4) float restLen;
+};
+
+struct Tetrahedral
+{
+	alignas(16) glm::uvec4 indices;
+	alignas(4) float restVolume;
 };
 
 struct TetrahedralMeshData
 {
 	std::vector<Particle> particles;
-	std::vector<glm::uvec4> tetIds;
+	std::vector<Tetrahedral> tets;
 	std::vector<Edge> edges;
-	//std::vector<uint32_t> surfaceIndices;
 };
 
 class TetrahedralMesh
@@ -32,10 +37,9 @@ private:
 	TetrahedralMeshData m_meshData;
 
 	Buffer m_particleBuffer;
-	Buffer m_tetIdBuffer;
+	Buffer m_tetBuffer;
 	Buffer m_edgeBuffer;
-	Buffer m_predictPosBuffer;
-	Buffer m_deltaPosBuffer;
+	Buffer m_pbdPosBuffer;
 
 	uint32_t m_particleCount;
 	uint32_t m_tetCount;
@@ -49,10 +53,9 @@ public:
 	void reset();
 
 	inline Buffer& getParticleBuffer() { return m_particleBuffer; }
-	inline Buffer& getTetIdBuffer() { return m_tetIdBuffer; }
+	inline Buffer& getTetBuffer() { return m_tetBuffer; }
 	inline Buffer& getEdgeBuffer() { return m_edgeBuffer; }
-	inline Buffer& getPredictPosBuffer() { return m_predictPosBuffer; }
-	inline Buffer& getDeltaPosBuffer() { return m_deltaPosBuffer; }
+	inline Buffer& getPbdPosBuffer() { return m_pbdPosBuffer; }
 
 	inline uint32_t getParticleCount() { return m_particleCount; }
 	inline uint32_t getTetCount() { return m_tetCount; }

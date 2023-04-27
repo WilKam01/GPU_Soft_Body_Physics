@@ -1,0 +1,93 @@
+#version 450
+#extension GL_EXT_shader_atomic_float : enable
+
+layout(set = 0, binding = 0) uniform UBO
+{
+    float deltaTime;
+	float distanceCompliance;
+	float volumeCompliance;
+} ubo;
+
+struct Particle
+{
+    vec3 position;
+    vec3 velocity;
+	float invMass;
+};
+
+layout(std140, set = 1, binding = 0) buffer ParticlesSSBO
+{
+	Particle particles[];
+};
+
+struct PbdPositions
+{
+	vec3 predict;
+    vec3 delta;
+};
+
+layout(std140, set = 1, binding = 1) buffer PositionsSSBO
+{
+	PbdPositions positions[];
+};
+
+struct Tetrahedral
+{
+    uvec4 indices;
+    float restVolume;
+};
+
+layout(std140, set = 1, binding = 3) buffer TetrahedralSSBO
+{
+	Tetrahedral tetrahedrals[];
+};
+
+layout(local_size_x = 1) in;
+
+void main()
+{
+	const uvec3 faceIndices[4] = { 
+        uvec3(1, 3, 2),
+        uvec3(0, 2, 3),
+        uvec3(0, 3, 1),
+        uvec3(0, 1, 2) 
+    };
+
+	float alpha = ubo.volumeCompliance / 100.0 / ubo.deltaTime / ubo.deltaTime;
+	uint index = gl_GlobalInvocationID.x;
+	uvec4 ids = tetrahedrals[index].indices;
+	float w = 0.0;
+	vec3 normals[4];
+
+	for(int i = 0; i < 4; i++)
+	{
+		vec3 e1 = positions[ids[faceIndices[i][1]]].predict - positions[ids[faceIndices[i][0]]].predict;
+		vec3 e2 = positions[ids[faceIndices[i][2]]].predict - positions[ids[faceIndices[i][0]]].predict;
+		normals[i] = cross(e1, e2) / 6.0;
+
+		w += dot(normals[i], normals[i]) * particles[ids[i]].invMass;
+	}
+
+	float volume = dot(
+		cross(
+			positions[ids[1]].predict - positions[ids[0]].predict,
+			positions[ids[2]].predict - positions[ids[0]].predict
+		),
+		positions[ids[3]].predict - positions[ids[0]].predict
+	) / 6.0;
+	float gradient = volume - tetrahedrals[index].restVolume;
+
+	float correction = -gradient / (w + alpha);
+	normals[0] *= correction * particles[ids[0]].invMass;
+	normals[1] *= correction * particles[ids[1]].invMass;
+	normals[2] *= correction * particles[ids[2]].invMass;
+	normals[3] *= correction * particles[ids[3]].invMass;
+
+	for(int i = 0; i < 3; i++)
+	{
+		atomicAdd(positions[ids[0]].delta[i], normals[0][i]);
+		atomicAdd(positions[ids[1]].delta[i], normals[1][i]);
+		atomicAdd(positions[ids[2]].delta[i], normals[2][i]);
+		atomicAdd(positions[ids[3]].delta[i], normals[3][i]);
+	}
+}

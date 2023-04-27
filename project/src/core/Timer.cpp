@@ -34,3 +34,8 @@ bool Timer::passedFixedDT()
 		m_accumulator -= m_fixedDelta;
 	return result;
 }
+
+void Timer::setFixedDT(float fixedDT)
+{
+	m_fixedDelta = fixedDT;
+}

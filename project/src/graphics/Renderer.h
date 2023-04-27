@@ -38,8 +38,24 @@ struct SoftBody
 {
 	Mesh mesh;
 	TetrahedralMesh tetMesh;
-	DescriptorSet descriptorSet;
+	DescriptorSet graphicsDescriptorSet;
+	DescriptorSet pbdDescriptorSet;
+	DescriptorSet deformDescriptorSet;
 	bool useSkinning = false;
+
+	bool active = false;
+	void cleanup()
+	{
+		if (active)
+		{
+			deformDescriptorSet.cleanup();
+			pbdDescriptorSet.cleanup();
+			graphicsDescriptorSet.cleanup();
+			tetMesh.cleanup();
+			mesh.cleanup();
+		}
+		active = false;
+	}
 };
 
 class Renderer
@@ -50,6 +66,9 @@ private:
 	uint32_t currentFrame;
 	Timer m_timer;
 	Camera m_camera;
+
+	int m_fixedTimeStep = 60;
+	int m_subSteps = 10;
 
 	Instance m_instance;
 	Device m_device;
@@ -67,11 +86,11 @@ private:
 	PipelineLayout m_tetPipelineLayout;
 	Pipeline m_tetPipeline;
 	DescriptorSetLayout m_tetDescriptorSetLayout;
-	DescriptorSet m_tetDescriptorSet;
 
 	PipelineLayout m_pbdPipelineLayout;
 	Pipeline m_presolvePipeline;
 	Pipeline m_distanceConstraintPipeline;
+	Pipeline m_volumeConstraintPipeline;
 	Pipeline m_postsolvePipeline;
 	DescriptorSetLayout m_pbdDescriptorSetLayout;
 	DescriptorSet m_pbdDescriptorSet;
@@ -82,7 +101,10 @@ private:
 
 	Texture m_texture;
 	Sampler m_sampler;
+
+	SoftBody* p_currentSoftBody;
 	SoftBody m_softBody;
+	SoftBody m_softBody1;
 
 	Texture m_floorTexture;
 	Mesh m_floorMesh;
@@ -96,7 +118,7 @@ private:
 	CommandBufferArray m_computeCommandBufferArray;
 
 	std::vector<UniformBuffer<GraphicsUBO>> m_graphicsUBO;
-	UniformBuffer<PbdUBO> m_pbdUBO;
+	std::vector<UniformBuffer<PbdUBO>> m_pbdUBO;
 
 	std::vector<VkSemaphore> m_imageAvailableSemaphores;
 	std::vector<VkSemaphore> m_renderFinishedSemaphores;
