@@ -2,11 +2,11 @@
 
 layout(std140, set = 0, binding = 0) buffer VertexPositionsSSBO
 {
-	vec4 vertexPositions[];
+	vec3 vertexPositions[];
 };
 layout(std140, set = 0, binding = 1) buffer VertexNormalsSSBO
 {
-	vec4 vertexNormals[];
+	vec3 vertexNormals[];
 };
 
 struct PbdPositions
@@ -15,9 +15,14 @@ struct PbdPositions
     vec3 delta;
 };
 
-layout(std140, set = 0, binding = 2) buffer PositionsSSBO
+layout(std140, set = 0, binding = 3) buffer PositionsSSBO
 {
 	PbdPositions positions[];
+};
+
+layout(std430, set = 0, binding = 4) buffer OrigIndicesSSBO
+{
+	uint indices[];
 };
 
 layout(local_size_x = 1) in;
@@ -25,5 +30,6 @@ layout(local_size_x = 1) in;
 void main()
 {
 	uint index = gl_GlobalInvocationID.x;
-	vertexPositions[index] = vec4(positions[index].predict, 0.0);
+	vertexNormals[index] = vec3(0.0);
+	vertexPositions[index] = positions[indices[index]].predict;
 }

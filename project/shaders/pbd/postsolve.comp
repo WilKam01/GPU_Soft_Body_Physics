@@ -33,6 +33,6 @@ layout(local_size_x = 1) in;
 void main()
 {
 	uint index = gl_GlobalInvocationID.x;
-	positions[index].predict += positions[index].delta * 0.2;
+	positions[index].predict += positions[index].delta * 0.25;
 	particles[index].velocity = (positions[index].predict - particles[index].position) / ubo.deltaTime;
 }

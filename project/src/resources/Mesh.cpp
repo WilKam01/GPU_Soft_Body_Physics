@@ -9,9 +9,9 @@ void Mesh::init(Device& device, CommandPool& commandPool, MeshData& meshData)
     m_indexCount = (uint32_t)meshData.indices.size();
 
     // Vertex buffers
-    addVertexBuffer<glm::vec4>(commandPool, meshData.vertices.positions, true);
-    addVertexBuffer<glm::vec3>(commandPool, meshData.vertices.normals, true);
-    addVertexBuffer<glm::vec2>(commandPool, meshData.vertices.uvs);
+    addVertexBuffer<avec3, avec3>(commandPool, meshData.vertices.positions, true);
+    addVertexBuffer<avec3, avec3>(commandPool, meshData.vertices.normals, true);
+    addVertexBuffer<glm::vec2, glm::vec2>(commandPool, meshData.vertices.uvs);
 
     // Index buffer
     Buffer stagingBuffer;
@@ -24,7 +24,7 @@ void Mesh::init(Device& device, CommandPool& commandPool, MeshData& meshData)
     );
 
     m_indexBuffer.init(device,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         bufferSize
     );

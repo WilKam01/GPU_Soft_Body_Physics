@@ -12,10 +12,15 @@ enum VertexStreamInput
 	VERTEX_STREAM_INPUT_ALL = ~0u,
 };
 
+struct avec3
+{
+	alignas(16) glm::vec3 vec;
+};
+
 struct VertexStream
 {
-	std::vector<glm::vec4> positions;
-	std::vector<glm::vec3> normals;
+	std::vector<avec3> positions;
+	std::vector<avec3> normals;
 	std::vector<glm::vec2> uvs;
 };
 
@@ -24,8 +29,7 @@ struct MeshData
 	VertexStream vertices;
 	std::vector<uint32_t> indices;
 
-	// "Raw" positions and indices, meaning original data from input file
-	std::vector<glm::vec3> origPositions;
+	// "Raw" indices, meaning original data from input file
 	std::vector<uint32_t> origIndices;
 };
 
@@ -44,7 +48,8 @@ private:
 	std::vector<VkDeviceSize> m_offsets;
 	uint32_t m_bufferCount;
 
-	template <typename T>
+	// T - Type of data vector, B - Type of data used in buffer
+	template <typename T, typename B>
 	void addVertexBuffer(CommandPool& commandPool, const std::vector<T>& stream, bool isSBO = false);
 public:
 	void init(Device& device, CommandPool& commandPool, MeshData& meshData);
@@ -56,15 +61,17 @@ public:
 	inline Buffer& getIndexBuffer() { return m_indexBuffer; }
 	inline uint32_t getVertexCount() { return m_vertexCount; }
 	inline uint32_t getIndexCount() { return m_indexCount; }
+
+	inline uint32_t getIndex(size_t i) { return m_meshData.indices[i]; }
 };
 
-template<typename T>
+template<typename T, typename B>
 inline void Mesh::addVertexBuffer(CommandPool& commandPool, const std::vector<T>& stream, bool isSBO)
 {
 	if (stream.size() == 0)
 		return;
 
-	VkDeviceSize bufferSize = sizeof(stream[0]) * stream.size();
+	VkDeviceSize bufferSize = sizeof(B) * stream.size();
 	Buffer stagingBuffer;
 	stagingBuffer.init(*p_device,
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,

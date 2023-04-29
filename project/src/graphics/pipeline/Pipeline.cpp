@@ -101,13 +101,13 @@ void Pipeline::initGraphics(
 
     if (inputStreams & VERTEX_STREAM_INPUT_POSITION)
     {
-        vertexInputBindingDescs.push_back({ (uint32_t)vertexInputBindingDescs.size(), sizeof(glm::vec4), VK_VERTEX_INPUT_RATE_VERTEX });
+        vertexInputBindingDescs.push_back({ (uint32_t)vertexInputBindingDescs.size(), sizeof(avec3), VK_VERTEX_INPUT_RATE_VERTEX });
         uint32_t index = (uint32_t)vertexInputAttributeDescs.size();
         vertexInputAttributeDescs.push_back({ index, index, VK_FORMAT_R32G32B32_SFLOAT, 0 });
     }
     if (inputStreams & VERTEX_STREAM_INPUT_NORMAL)
     {
-        vertexInputBindingDescs.push_back({ (uint32_t)vertexInputBindingDescs.size(), sizeof(glm::vec3), VK_VERTEX_INPUT_RATE_VERTEX });
+        vertexInputBindingDescs.push_back({ (uint32_t)vertexInputBindingDescs.size(), sizeof(avec3), VK_VERTEX_INPUT_RATE_VERTEX });
         uint32_t index = (uint32_t)vertexInputAttributeDescs.size();
         vertexInputAttributeDescs.push_back({ index, index, VK_FORMAT_R32G32B32_SFLOAT, 0 });
     }

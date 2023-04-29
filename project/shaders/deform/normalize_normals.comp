@@ -1,0 +1,14 @@
+#version 450
+
+layout(std140, set = 0, binding = 1) buffer VertexNormalsSSBO
+{
+	vec3 vertexNormals[];
+};
+
+layout(local_size_x = 1) in;
+
+void main()
+{
+	uint index = gl_GlobalInvocationID.x;
+	vertexNormals[index] = normalize(vertexNormals[index]);
+}

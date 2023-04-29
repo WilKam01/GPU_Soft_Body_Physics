@@ -43,11 +43,15 @@ struct SoftBody
 	DescriptorSet deformDescriptorSet;
 	bool useSkinning = false;
 
+	// Buffer used to deform the original mesh, either directly in the form of indices or in the form of tetrahedral skinning
+	Buffer deformBuffer;
+
 	bool active = false;
 	void cleanup()
 	{
 		if (active)
 		{
+			deformBuffer.cleanup();
 			deformDescriptorSet.cleanup();
 			pbdDescriptorSet.cleanup();
 			graphicsDescriptorSet.cleanup();
@@ -69,6 +73,7 @@ private:
 
 	int m_fixedTimeStep = 60;
 	int m_subSteps = 10;
+	bool m_renderTetMesh = true;
 
 	Instance m_instance;
 	Device m_device;
@@ -98,6 +103,8 @@ private:
 	PipelineLayout m_deformPipelineLayout;
 	DescriptorSetLayout m_deformDescriptorSetLayout;
 	Pipeline m_deformPipeline;
+	Pipeline m_recalcNormalsPipeline;
+	Pipeline m_normalizeNormalsPipeline;
 
 	Texture m_texture;
 	Sampler m_sampler;
@@ -131,6 +138,7 @@ private:
 
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 	void computePhysics(VkCommandBuffer commandBuffer);
+	void deformMesh(VkCommandBuffer commandBuffer);
 	void createSyncObjects();
 
 	void createResources();

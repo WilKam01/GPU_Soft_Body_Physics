@@ -63,8 +63,6 @@ MeshData ResourceManager::loadMeshOBJ(const std::string& path, glm::vec3 offset)
 
     std::unordered_map<std::string, uint32_t> uniqueVertices{};
     mesh.indices.resize(obj->index_count);
-    mesh.origIndices.resize(obj->index_count);
-    mesh.origPositions.resize(obj->position_count - 1);
 
     for (unsigned int i = 0; i < obj->index_count; i++)
     {
@@ -72,33 +70,25 @@ MeshData ResourceManager::loadMeshOBJ(const std::string& path, glm::vec3 offset)
         if (!uniqueVertices.count(key))
         {
             uniqueVertices[key] = static_cast<uint32_t>(mesh.vertices.positions.size());
-            mesh.vertices.positions.push_back(glm::vec4(
+            mesh.vertices.positions.push_back({ glm::vec3(
                 obj->positions[obj->indices[i].p * 3],
                 obj->positions[obj->indices[i].p * 3 + 1],
-                obj->positions[obj->indices[i].p * 3 + 2],
-                0.0f
-            ) + glm::vec4(offset, 0.0f));
-            mesh.vertices.normals.push_back(glm::vec3(
+                obj->positions[obj->indices[i].p * 3 + 2]
+            ) + offset });
+            mesh.vertices.normals.push_back({ glm::vec3(
                 obj->normals[obj->indices[i].n * 3],
                 obj->normals[obj->indices[i].n * 3 + 1],
                 obj->normals[obj->indices[i].n * 3 + 2]
-            ));
+            ) });
             mesh.vertices.uvs.push_back(glm::vec2(
                 obj->texcoords[obj->indices[i].t * 2],
                 obj->texcoords[obj->indices[i].t * 2 + 1]
             ));
+
+            mesh.origIndices.push_back(obj->indices[i].p - 1);
         }
 
         mesh.indices[i] = uniqueVertices[key];
-        mesh.origIndices[i] = obj->indices[i].p;
-    }
-    for (unsigned int i = 1; i < obj->position_count; i++)
-    {
-        mesh.origPositions[i - 1] = glm::vec3(
-            obj->positions[i * 3],
-            obj->positions[i * 3 + 1],
-            obj->positions[i * 3 + 2]
-        ) + offset;
     }
 
     fast_obj_destroy(obj);
