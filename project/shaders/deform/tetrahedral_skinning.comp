@@ -1,0 +1,61 @@
+#version 450
+
+layout(std140, set = 0, binding = 0) buffer VertexPositionsSSBO
+{
+	vec3 vertexPositions[];
+};
+layout(std140, set = 0, binding = 1) buffer VertexNormalsSSBO
+{
+	vec3 vertexNormals[];
+};
+
+struct PbdPositions
+{
+	vec3 predict;
+    vec3 delta;
+};
+
+layout(std140, set = 0, binding = 3) buffer PositionsSSBO
+{
+	PbdPositions positions[];
+};
+
+struct SkinningInfo
+{
+	vec3 weights; // Barycentric coordinates
+	uint tetIndex;
+};
+
+layout(std430, set = 0, binding = 4) buffer TetSkinningSSBO
+{
+	SkinningInfo skinning[];
+};
+
+struct Tetrahedral
+{
+    uvec4 indices;
+    float restVolume;
+};
+
+layout(std140, set = 0, binding = 5) readonly buffer TetrahedralSSBO
+{
+	Tetrahedral tetrahedrals[];
+};
+
+layout(local_size_x = 1) in;
+
+void main()
+{
+	uint index = gl_GlobalInvocationID.x;
+	vertexNormals[index] = vec3(0.0);
+	SkinningInfo skin = skinning[index];
+
+	uvec4 tets = tetrahedrals[skinning[index].tetIndex].indices;
+	float w = 1.0 - (skinning[index].weights.x + skinning[index].weights.y + skinning[index].weights.z);
+
+	vertexPositions[index] = 
+	positions[tets.x].predict * skinning[index].weights.x + 
+	positions[tets.y].predict * skinning[index].weights.y + 
+	positions[tets.z].predict * skinning[index].weights.z + 
+	positions[tets.w].predict * w;
+}

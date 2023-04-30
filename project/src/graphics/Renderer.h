@@ -34,6 +34,12 @@ struct PbdUBO
 	float volumeCompliance;
 };
 
+struct SkinningInfo
+{
+	alignas(16) glm::vec3 weights = glm::vec3(0.0f);
+	alignas(4) uint32_t tetId = 0;
+};
+
 struct SoftBody
 {
 	Mesh mesh;
@@ -103,6 +109,7 @@ private:
 	PipelineLayout m_deformPipelineLayout;
 	DescriptorSetLayout m_deformDescriptorSetLayout;
 	Pipeline m_deformPipeline;
+	Pipeline m_tetSkinningPipeline;
 	Pipeline m_recalcNormalsPipeline;
 	Pipeline m_normalizeNormalsPipeline;
 
@@ -142,7 +149,7 @@ private:
 	void createSyncObjects();
 
 	void createResources();
-	SoftBody createSoftBody(const std::string& name, glm::vec3 offset);
+	SoftBody createSoftBody(const std::string& name, glm::vec3 offset, int resolution = 100);
 
 	void recreateSwapChain();
 	void renderImGui();

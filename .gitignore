@@ -359,4 +359,5 @@ MigrationBackup/
 *.spv
 **/imgui.ini
 !**/models/*.obj
+!**/tet_models/*.obj
 screenshots/**

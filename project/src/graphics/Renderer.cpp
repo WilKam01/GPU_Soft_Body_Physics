@@ -128,7 +128,12 @@ void Renderer::deformMesh(VkCommandBuffer commandBuffer)
     memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
     m_deformPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, { p_currentSoftBody->deformDescriptorSet.get(0) });
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_deformPipeline.get());
+
+    if (p_currentSoftBody->useSkinning)
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_tetSkinningPipeline.get());
+    else
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_deformPipeline.get());
+
     vkCmdDispatch(commandBuffer, p_currentSoftBody->mesh.getVertexCount(), 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
@@ -201,7 +206,7 @@ void Renderer::createSyncObjects()
 
 void Renderer::createResources()
 {
-    m_softBody = createSoftBody("cube", glm::vec3(0.0f, 5.0f, 0.0f));
+    m_softBody = createSoftBody("icosphere", glm::vec3(0.0f, 5.0f, 0.0f), 50);
     p_currentSoftBody = &m_softBody;
 
     static uint8_t pixel[4] = { 25, 25, 205, 255 };
@@ -243,11 +248,18 @@ void Renderer::createResources()
     m_floorTexture = ResourceManager::loadTexture("assets/textures/check.jpg");
 }
 
-SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset)
+SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset, int resolution)
 {
     SoftBody softBody;
     MeshData mesh = ResourceManager::loadMeshOBJ("assets/models/" + name + ".obj", offset);
-    TetrahedralMeshData tetMesh = ResourceManager::loadTetrahedralMeshOBJ("assets/tet_models/" + name + ".obj", offset);
+    std::string resStr = resolution == 100 ? "" : std::to_string(resolution);
+    TetrahedralMeshData tetMesh = ResourceManager::loadTetrahedralMeshOBJ("assets/tet_models/" + name + resStr + ".obj", offset);
+
+    if (!mesh.vertices.positions.size() || !tetMesh.particles.size())
+    {
+        softBody.active = false;
+        return softBody;
+    }
 
     softBody.mesh.init(m_device, m_commandPool, mesh);
     softBody.tetMesh.init(m_device, m_commandPool, tetMesh);
@@ -267,15 +279,99 @@ SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset)
     softBody.deformDescriptorSet.writeBuffer(0, 1, softBody.mesh.getVertexBuffer(1));
     softBody.deformDescriptorSet.writeBuffer(0, 2, softBody.mesh.getIndexBuffer());
     softBody.deformDescriptorSet.writeBuffer(0, 3, softBody.tetMesh.getPbdPosBuffer());
+    softBody.deformDescriptorSet.writeBuffer(0, 5, softBody.tetMesh.getTetBuffer());
 
     Buffer stagingBuffer;
-    VkDeviceSize bufferSize = sizeof(uint32_t) * softBody.mesh.getVertexCount();
-    stagingBuffer.init(m_device,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        bufferSize,
-        (void*)mesh.origIndices.data()
-    );
+    VkDeviceSize bufferSize = 0;
+    // No skinning
+    if (resolution == 100)
+    {
+        bufferSize = sizeof(uint32_t) * softBody.mesh.getVertexCount();
+        stagingBuffer.init(m_device,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            bufferSize,
+            (void*)mesh.origIndices.data()
+        );
+        softBody.useSkinning = false;
+    }
+    // Tetrahedral skinning
+    else
+    {
+        std::vector<SkinningInfo> skinningInfo(mesh.vertices.positions.size());
+
+        // Tetrahedral info
+        int tetCount = (int)tetMesh.tets.size();
+        std::vector<glm::vec4> tetCenters(tetCount); // w component is max radius
+        std::vector<glm::mat3> tetMatrices(tetCount);
+
+        for (int i = 0; i < tetCount; i++)
+        {
+            glm::uvec4 indices = tetMesh.tets[i].indices;
+            glm::vec3 tetCenter =
+                (tetMesh.particles[indices[0]].position +
+                tetMesh.particles[indices[1]].position +
+                tetMesh.particles[indices[2]].position +
+                tetMesh.particles[indices[3]].position) * 0.25f;
+            
+            float maxRadius = 0.0f;
+            for (int j = 0; j < 4; j++)
+            {
+                glm::vec3 diff = tetMesh.particles[indices[j]].position - tetCenter;
+                maxRadius = std::max(maxRadius, glm::dot(diff, diff));
+            }
+
+            tetCenters[i] = glm::vec4(tetCenter.x, tetCenter.y, tetCenter.z, maxRadius + 0.025f);
+            tetMatrices[i] = glm::inverse(
+                glm::mat3(
+                    tetMesh.particles[indices[0]].position - tetMesh.particles[indices[3]].position,
+                    tetMesh.particles[indices[1]].position - tetMesh.particles[indices[3]].position,
+                    tetMesh.particles[indices[2]].position - tetMesh.particles[indices[3]].position
+                )
+            );
+        }
+
+        // Apply to mesh vertices
+        for (int i = 0, len = (int)mesh.vertices.positions.size(); i < len; i++)
+        {
+            float minDist = FLT_MAX;
+            for (int j = 0; j < tetCount; j++)
+            {
+                glm::vec3 diff = mesh.vertices.positions[i].vec - glm::vec3(tetCenters[j].x, tetCenters[j].y, tetCenters[j].z);
+                float dist = glm::dot(diff, diff);
+                if (dist > tetCenters[j].w)
+                    continue;
+
+                diff = mesh.vertices.positions[i].vec - tetMesh.particles[tetMesh.tets[j].indices[3]].position;
+                diff = tetMatrices[j] * diff;
+
+                float baryCoords[4]{ diff.x, diff.y, diff.z, 1.0f - (diff.x + diff.y + diff.z) };
+                float maxDist = 0.0f;
+                for (int k = 0; k < 4; k++)
+                    maxDist = std::max(maxDist, -baryCoords[k]);
+
+                if (maxDist < minDist)
+                {
+                    minDist = maxDist;
+                    skinningInfo[i].tetId = j;
+                    skinningInfo[i].weights = glm::vec3(baryCoords[0], baryCoords[1], baryCoords[2]);
+
+                    // Surrounded by tetrhedral
+                    if (maxDist <= 0.0f)
+                        break;
+                }
+            }
+        }
+
+        bufferSize = sizeof(SkinningInfo) * (uint32_t)skinningInfo.size();
+        stagingBuffer.init(m_device,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            bufferSize,
+            (void*)skinningInfo.data()
+        );
+        softBody.useSkinning = true;
+    }
 
     softBody.deformBuffer.init(m_device,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
@@ -287,8 +383,8 @@ SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset)
     stagingBuffer.cleanup();
 
     softBody.deformDescriptorSet.writeBuffer(0, 4, softBody.deformBuffer);
-
     softBody.active = true;
+
     return softBody;
 }
 
@@ -380,6 +476,8 @@ void Renderer::renderImGui()
 
     static GraphicsUBO& ubo = m_graphicsUBO[currentFrame].get();
     static char name[25];
+    static int resolution = 100;
+    static glm::vec3 offset = glm::vec3(0.0f, 5.0f, 0.0f);
 
     ImGui::Begin("Scene settings");
 
@@ -398,6 +496,8 @@ void Renderer::renderImGui()
     ImGui::Text("");
     ImGui::Text("Soft body model");
     ImGui::InputText("Name", name, 100);
+    ImGui::SliderInt("Resolution", &resolution, 1, 100);
+    ImGui::SliderFloat3("Start offset", (float*)&offset, 0.0f, 10.0f);
     if (ImGui::Button("Load"))
     {
         std::ifstream stream;
@@ -407,14 +507,16 @@ void Renderer::renderImGui()
             if (p_currentSoftBody == &m_softBody)
             {
                 m_softBody1.cleanup();
-                m_softBody1 = createSoftBody(name, glm::vec3(0.0f, 5.0f, 0.0f));
-                p_currentSoftBody = &m_softBody1;
+                m_softBody1 = createSoftBody(name, offset, resolution);
+                if(m_softBody1.active)
+                    p_currentSoftBody = &m_softBody1;
             }
             else
             {
                 m_softBody.cleanup();
-                m_softBody = createSoftBody(name, glm::vec3(0.0f, 5.0f, 0.0f));
-                p_currentSoftBody = &m_softBody;
+                m_softBody = createSoftBody(name, offset, resolution);
+                if (m_softBody.active)
+                    p_currentSoftBody = &m_softBody;
             }
             m_timer.reset();
         }
@@ -537,11 +639,13 @@ void Renderer::init(Window& window)
             { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
             { 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
             { 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
-            { 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
+            { 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
         }
     });
     m_deformPipelineLayout.init(m_device, &m_deformDescriptorSetLayout);
     m_deformPipeline.initCompute(m_device, m_deformPipelineLayout, "assets/spv/deform.comp.spv");
+    m_tetSkinningPipeline.initCompute(m_device, m_deformPipelineLayout, "assets/spv/tetrahedral_skinning.comp.spv");
     m_recalcNormalsPipeline.initCompute(m_device, m_deformPipelineLayout, "assets/spv/recalculate_normals.comp.spv");
     m_normalizeNormalsPipeline.initCompute(m_device, m_deformPipelineLayout, "assets/spv/normalize_normals.comp.spv");
 
@@ -619,6 +723,7 @@ void Renderer::cleanup()
 
     m_normalizeNormalsPipeline.cleanup();
     m_recalcNormalsPipeline.cleanup();
+    m_tetSkinningPipeline.cleanup();
     m_deformPipeline.cleanup();
     m_deformPipelineLayout.cleanup();
     m_deformDescriptorSetLayout.cleanup();
