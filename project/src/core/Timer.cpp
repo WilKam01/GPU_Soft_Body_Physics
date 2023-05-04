@@ -19,6 +19,9 @@ void Timer::update()
 	m_delta = m_elapsedSeconds.count();
 	m_total += m_delta;
 	m_accumulator += m_delta;
+
+	m_averageDelta[m_averageDeltaIndex] = m_delta;
+	m_averageDeltaIndex = (m_averageDeltaIndex + 1) % FRAME_COUNT_AVG;
 }
 
 void Timer::reset()
@@ -38,4 +41,12 @@ bool Timer::passedFixedDT()
 void Timer::setFixedDT(float fixedDT)
 {
 	m_fixedDelta = fixedDT;
+}
+
+float Timer::getAverageDT()
+{
+	float average = 0.0f;
+	for (auto& dt : m_averageDelta)
+		average += dt;
+	return average / FRAME_COUNT_AVG;
 }

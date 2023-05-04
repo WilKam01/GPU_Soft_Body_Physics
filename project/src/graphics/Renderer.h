@@ -66,7 +66,8 @@ class Renderer
 {
 public:
 	const static int MAX_FRAMES_IN_FLIGHT = 2;
-	const static int MAX_SOFT_BODY_COUNT = 100;
+	const static int MAX_SOFT_BODY_COUNT = 50;
+	const static int MAX_FRAME_MEASUREMENT_COUNT = 1000;
 private:
 	uint32_t currentFrame;
 	Timer m_timer;
@@ -115,6 +116,20 @@ private:
 	std::array<SoftBody, MAX_SOFT_BODY_COUNT> m_softBodies;
 	std::array<std::vector<SoftBody>, MAX_FRAMES_IN_FLIGHT + 1> m_removeBodies; // Removed after their execution is done
 
+	// Measurement related
+	uint32_t m_measureFrameCounter = MAX_FRAME_MEASUREMENT_COUNT;
+	bool m_measureFPS; // true : measure fps of model, false: measure error
+
+	char m_modelName[25] = "icosphere";
+	int m_modelResolution = 100;
+	int m_modelCount = 1;
+	int m_frameCount = 100;
+
+	std::vector<float> m_avgFPS;
+	std::vector<float> m_avgError;
+	std::vector<float> m_avgCenterError;
+	std::array<std::vector<glm::vec3>, 2> m_avgCenterPos; // Average center of full res tetrahedral mesh and lower res tetrahedral mesh
+
 	Texture m_floorTexture;
 	Mesh m_floorMesh;
 
@@ -136,6 +151,7 @@ private:
 	std::vector<VkFence> m_computeInFlightFences;
 	std::vector<VkSemaphore> m_computeFinishedSemaphores;
 
+	bool m_renderImGui = true;
 	ImGuiRenderer m_imGuiRenderer;
 
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);

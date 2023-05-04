@@ -92,17 +92,6 @@ void Renderer::computePhysics(VkCommandBuffer commandBuffer, SoftBody& softBody)
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_stretchConstraintPipeline.get());
     vkCmdDispatch(commandBuffer, softBody.tetMesh.getEdgeCount(), 1, 1);
 
-    /*vkCmdPipelineBarrier(commandBuffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        0,
-        1,
-        &memoryBarrier,
-        0,
-        nullptr,
-        0,
-        nullptr);*/
-
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_volumeConstraintPipeline.get());
     vkCmdDispatch(commandBuffer, softBody.tetMesh.getTetCount(), 1, 1);
 
@@ -218,7 +207,7 @@ void Renderer::createSyncObjects()
 
 void Renderer::createResources()
 {
-    m_softBodies[0] = createSoftBody("icosphere", glm::vec3(0.0f, 5.0f, 0.0f));
+    m_softBodies[0] = createSoftBody(m_modelName, glm::vec3(0.0f, 5.0f, 0.0f));
 
     static uint8_t pixel[4] = { 25, 25, 205, 255 };
     m_texture.init(m_device, m_commandPool, &pixel, glm::uvec2(1, 1));
@@ -362,13 +351,20 @@ void Renderer::renderImGui()
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
+    if (!m_renderImGui)
+    {
+        ImGui::Render();
+        return;
+    }
+
     //------------------------------------------
 
     ImGui::Begin("Stats");
 
+    float averageDT = m_timer.getAverageDT();
     ImGui::Text("runtime: %.3f s", m_timer.getTotal());
-    ImGui::Text("delta: %.4f ms", m_timer.getDT());
-    ImGui::Text("FPS: %.3f", 1.0f / m_timer.getDT());
+    ImGui::Text("average delta: %.4f ms", averageDT * 1000.0f);
+    ImGui::Text("average FPS: %.3f", 1.0f / averageDT);
 
     ImGui::End();
 
@@ -414,10 +410,7 @@ void Renderer::renderImGui()
     ImGui::End();
 
     static GraphicsUBO& ubo = m_graphicsUBO[currentFrame].get();
-    static char name[25];
-    static int resolution = 100;
     static glm::vec3 offset = glm::vec3(0.0f, 5.0f, 0.0f);
-    static int num = 1;
 
     ImGui::Begin("Scene settings");
 
@@ -435,20 +428,64 @@ void Renderer::renderImGui()
 
     ImGui::Text("");
     ImGui::Text("Soft body model");
-    ImGui::InputText("Name", name, 100);
-    ImGui::SliderInt("Resolution", &resolution, 1, 100);
+    ImGui::InputText("Name", m_modelName, 25);
+    ImGui::SliderInt("Resolution", &m_modelResolution, 1, 100);
     ImGui::SliderFloat3("Start offset", (float*)&offset, 0.0f, 10.0f);
-    ImGui::SliderInt("Number of bodies", &num, 1, MAX_SOFT_BODY_COUNT);
+    ImGui::SliderInt("Number of bodies", &m_modelCount, 1, MAX_SOFT_BODY_COUNT);
+    ImGui::SliderInt("Frame measure count", &m_frameCount, 100, MAX_FRAME_MEASUREMENT_COUNT);
+
     if (ImGui::Button("Load"))
     {
-        for (int i = 0; i < num; i++)
+        for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
         {
-            if(m_softBodies[i].active)
-                m_removeBodies[0].push_back(m_softBodies[i]);
-            m_softBodies[i] = createSoftBody(name, offset, resolution);
+            if (!m_softBodies[i].active)
+                break;
+            m_removeBodies[0].push_back(m_softBodies[i]);
+            m_softBodies[i].active = false;
         }
+        for (int i = 0; i < m_modelCount; i++)
+            m_softBodies[i] = createSoftBody(m_modelName, offset, m_modelResolution);
 
         m_timer.reset();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Measure FPS") && m_measureFrameCounter == MAX_FRAME_MEASUREMENT_COUNT)
+    {
+        m_avgFPS = std::vector<float>(m_frameCount, 0.0f);
+        m_measureFPS = true;
+        m_measureFrameCounter = 0;
+
+        for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
+        {
+            if (!m_softBodies[i].active)
+                break;
+            m_removeBodies[0].push_back(m_softBodies[i]);
+            m_softBodies[i].active = false;
+        }
+        for (int i = 0; i < m_modelCount; i++)
+            m_softBodies[i] = createSoftBody(m_modelName, offset, m_modelResolution);
+
+        m_timer.reset();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Measure Error") && m_measureFrameCounter == MAX_FRAME_MEASUREMENT_COUNT)
+    {
+        m_avgError = std::vector<float>(m_frameCount, 0.0f);
+        m_avgCenterError = std::vector<float>(m_frameCount, 0.0f);
+        m_avgCenterPos[0] = std::vector<glm::vec3>(m_frameCount, glm::vec3(0.0f));
+        m_avgCenterPos[1] = std::vector<glm::vec3>(m_frameCount, glm::vec3(0.0f));
+        m_measureFPS = false;
+        m_measureFrameCounter = 0;
+
+        for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
+        {
+            if (!m_softBodies[i].active)
+                break;
+            m_removeBodies[0].push_back(m_softBodies[i]);
+            m_softBodies[i].active = false;
+        }
+        m_softBodies[0] = createSoftBody(m_modelName, offset, 100);
+        m_softBodies[1] = createSoftBody(m_modelName, offset, m_modelResolution);
     }
 
     m_camera.setPosition(camPos);
@@ -720,6 +757,106 @@ void Renderer::render()
         // Remove soft bodies outside of max frames in flight scope
         for (auto& remove : m_removeBodies.back())
             remove.cleanup();
+
+        // Measurements
+        if (m_measureFrameCounter < MAX_FRAME_MEASUREMENT_COUNT)
+        {
+            if (m_measureFPS)
+            {
+                m_avgFPS[m_measureFrameCounter++] = 1.0f / m_timer.getAverageDT();
+                if (m_measureFrameCounter == (uint32_t)m_avgFPS.size())
+                {
+                    std::string path(
+                        "../measurements/fps/" +
+                        std::string(m_modelName) + "_" +
+                        std::to_string(m_modelResolution) + "_" +
+                        std::to_string(m_modelCount) + "_" +
+                        std::to_string(m_frameCount) + ".txt"
+                    );
+                    std::ofstream out(path);
+
+                    for (auto& fps : m_avgFPS)
+                        out << fps << "\n";
+
+                    out.close();
+                    LOG_WRITE("Successfully performed fps measurements");
+                    m_measureFrameCounter = MAX_FRAME_MEASUREMENT_COUNT;
+                }
+            }
+            else
+            {
+                std::array<std::vector<avec3>, 2> pos;
+                uint32_t vertexCount = m_softBodies[0].mesh.getVertexCount();
+                for (int i = 0; i < 2; i++)
+                {
+                    pos[i].resize(vertexCount);
+                    Buffer& buffer = m_softBodies[i].mesh.getVertexBuffer(0);
+
+                    buffer.map();
+                    memcpy(pos[i].data(), buffer.getMapped(), buffer.getSize());
+                    buffer.unmap();
+                }
+
+                for (uint32_t i = 0; i < vertexCount; i++)
+                {
+                    m_avgError[m_measureFrameCounter] += glm::length(pos[1][i].vec - pos[0][i].vec);
+                    m_avgCenterPos[0][m_measureFrameCounter] += pos[0][i].vec;
+                    m_avgCenterPos[1][m_measureFrameCounter] += pos[1][i].vec;
+                }
+                m_avgError[m_measureFrameCounter] /= vertexCount;
+                m_avgCenterPos[0][m_measureFrameCounter] /= vertexCount;
+                m_avgCenterPos[1][m_measureFrameCounter] /= vertexCount;
+                m_avgCenterError[m_measureFrameCounter] = glm::length(m_avgCenterPos[1][m_measureFrameCounter] - m_avgCenterPos[0][m_measureFrameCounter]);
+                m_measureFrameCounter++;
+
+                if (m_measureFrameCounter == (uint32_t)m_avgError.size())
+                {
+                    std::string path0(
+                        "../measurements/position/" +
+                        std::string(m_modelName) + "_100_" + 
+                        std::to_string(m_frameCount) + ".txt"
+                    );
+                    std::string path1(
+                        "../measurements/position/" +
+                        std::string(m_modelName) + "_" +
+                        std::to_string(m_modelResolution) + "_" + 
+                        std::to_string(m_frameCount) + ".txt"
+                    );
+
+                    // Center positions
+                    std::ofstream out(path0);
+                    for (auto& pos : m_avgCenterPos[0])
+                        out << pos.x << " " << pos.y << " " << pos.z << "\n";
+                    out.close();
+
+                    out.open(path1);
+                    for (auto& pos : m_avgCenterPos[1])
+                        out << pos.x << " " << pos.y << " " << pos.z << "\n";
+                    out.close();
+
+                    std::string errPath(
+                        "../measurements/error/" +
+                        std::string(m_modelName) + "_" +
+                        std::to_string(m_modelResolution) + "_" +
+                        std::to_string(m_frameCount)
+                    );
+
+                    // Error and center error
+                    out.open(errPath + ".txt");
+                    for (auto& err : m_avgError)
+                        out << err << "\n";
+                    out.close();
+
+                    out.open(errPath + "_center.txt");
+                    for (auto& err : m_avgCenterError)
+                        out << err << "\n";
+                    out.close();
+
+                    LOG_WRITE("Successfully performed error measurements");
+                    m_measureFrameCounter = MAX_FRAME_MEASUREMENT_COUNT;
+                }
+            }
+        }
     }
      m_computeCommandBufferArray.end(currentFrame);
 

@@ -361,3 +361,4 @@ MigrationBackup/
 !**/models/*.obj
 !**/tet_models/*.obj
 screenshots/**
+measurements/**
