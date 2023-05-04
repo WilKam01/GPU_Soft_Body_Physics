@@ -34,7 +34,7 @@ class TetrahedralMesh
 private:
 	Device* p_device;
 	CommandPool* p_commandPool;
-	TetrahedralMeshData m_meshData;
+	TetrahedralMeshData* p_meshData;
 
 	Buffer m_particleBuffer;
 	Buffer m_tetBuffer;
@@ -48,9 +48,8 @@ private:
 	template<typename T>
 	void initBuffer(Buffer& buffer, const T* data, uint32_t count);
 public:
-	void init(Device& device, CommandPool& commandPool, TetrahedralMeshData& meshData);
+	void init(Device& device, CommandPool& commandPool, TetrahedralMeshData* meshData, glm::vec3 offset = glm::vec3(0.0f));
 	void cleanup();
-	void reset();
 
 	inline Buffer& getParticleBuffer() { return m_particleBuffer; }
 	inline Buffer& getTetBuffer() { return m_tetBuffer; }

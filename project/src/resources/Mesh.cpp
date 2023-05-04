@@ -1,17 +1,17 @@
 #include "pch.h"
 #include "Mesh.h"
 
-void Mesh::init(Device& device, CommandPool& commandPool, MeshData& meshData)
+void Mesh::init(Device& device, CommandPool& commandPool, MeshData* meshData)
 {
     p_device = &device;
-    m_meshData = meshData;
-    m_vertexCount = (uint32_t)meshData.vertices.positions.size();
-    m_indexCount = (uint32_t)meshData.indices.size();
+    p_meshData = meshData;
+    m_vertexCount = (uint32_t)meshData->vertices.positions.size();
+    m_indexCount = (uint32_t)meshData->indices.size();
 
     // Vertex buffers
-    addVertexBuffer<avec3, avec3>(commandPool, meshData.vertices.positions, true);
-    addVertexBuffer<avec3, avec3>(commandPool, meshData.vertices.normals, true);
-    addVertexBuffer<glm::vec2, glm::vec2>(commandPool, meshData.vertices.uvs);
+    addVertexBuffer<avec3, avec3>(commandPool, meshData->vertices.positions, true);
+    addVertexBuffer<avec3, avec3>(commandPool, meshData->vertices.normals, true);
+    addVertexBuffer<glm::vec2, glm::vec2>(commandPool, meshData->vertices.uvs);
 
     // Index buffer
     Buffer stagingBuffer;
@@ -20,7 +20,7 @@ void Mesh::init(Device& device, CommandPool& commandPool, MeshData& meshData)
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         bufferSize,
-        (void*)meshData.indices.data()
+        (void*)meshData->indices.data()
     );
 
     m_indexBuffer.init(device,

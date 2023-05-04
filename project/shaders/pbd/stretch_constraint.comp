@@ -66,9 +66,6 @@ void main()
 	vec3 corrVec0 = correction * diff * particles[edges[index].indices[0]].invMass;
 	vec3 corrVec1 = -correction * diff * particles[edges[index].indices[1]].invMass;
 
-	//positions[edges[index].indices[0]].delta += corrVec;
-	//positions[edges[index].indices[1]].delta -= corrVec;
-
 	for(int i = 0; i < 3; i++)
 	{
 		atomicAdd(positions[edges[index].indices[0]].delta[i], corrVec0[i]);

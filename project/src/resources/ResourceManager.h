@@ -4,19 +4,37 @@
 #include "Mesh.h"
 #include "TetrahedralMesh.h"
 
+struct DeformationInfo
+{
+	alignas(16) glm::vec3 weights = glm::vec3(0.0f);
+	alignas(4) uint32_t tetId = 0;
+};
+
+struct SoftBodyData
+{
+	MeshData mesh;
+	TetrahedralMeshData tetMesh;
+	std::vector<DeformationInfo> deformationInfo;
+};
+
 class ResourceManager
 {
 private:
-	static Device* s_device;
-	static CommandPool* s_commandPool;
+	Device* s_device;
+	CommandPool* s_commandPool;
+	std::unordered_map<std::string, SoftBodyData> softBodyModels;
 public:
-	static void init(Device& device, CommandPool& commandPool);
+	void init(Device& device, CommandPool& commandPool);
 
-	static Texture loadTexture(const std::string& path);
-	static void exportJPG(Texture& texture, const std::string& path);
+	Texture loadTexture(const std::string& path);
+	void exportJPG(Texture& texture, const std::string& path);
 
 	// Note: The face format in the obj file must be triangular
-	static MeshData loadMeshOBJ(const std::string& path, glm::vec3 offset = glm::vec3(0.0f));
-	static TetrahedralMeshData loadTetrahedralMeshOBJ(const std::string& path, glm::vec3 offset = glm::vec3(0.0f));
+	MeshData loadMeshOBJ(const std::string& path);
+
+	// Note: The face format in the obj file must be quadratic
+	TetrahedralMeshData loadTetrahedralMeshOBJ(const std::string& path, glm::vec3 offset = glm::vec3(0.0f));
+
+	SoftBodyData* getSoftBody(std::string name, int resolution);
 };
 

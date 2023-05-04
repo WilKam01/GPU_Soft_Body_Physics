@@ -34,12 +34,6 @@ struct PbdUBO
 	float volumeCompliance;
 };
 
-struct SkinningInfo
-{
-	alignas(16) glm::vec3 weights = glm::vec3(0.0f);
-	alignas(4) uint32_t tetId = 0;
-};
-
 struct SoftBody
 {
 	Mesh mesh;
@@ -47,9 +41,9 @@ struct SoftBody
 	DescriptorSet graphicsDescriptorSet;
 	DescriptorSet pbdDescriptorSet;
 	DescriptorSet deformDescriptorSet;
-	bool useSkinning = false;
+	bool useTetDeformation = false;
 
-	// Buffer used to deform the original mesh, either directly in the form of indices or in the form of tetrahedral skinning
+	// Buffer used to deform the original mesh, either directly in the form of indices or in the form of tetrahedral deformation
 	Buffer deformBuffer;
 
 	bool active = false;
@@ -72,10 +66,12 @@ class Renderer
 {
 public:
 	const static int MAX_FRAMES_IN_FLIGHT = 2;
+	const static int MAX_SOFT_BODY_COUNT = 100;
 private:
 	uint32_t currentFrame;
 	Timer m_timer;
 	Camera m_camera;
+	ResourceManager m_resources;
 
 	int m_fixedTimeStep = 60;
 	int m_subSteps = 10;
@@ -100,7 +96,7 @@ private:
 
 	PipelineLayout m_pbdPipelineLayout;
 	Pipeline m_presolvePipeline;
-	Pipeline m_distanceConstraintPipeline;
+	Pipeline m_stretchConstraintPipeline;
 	Pipeline m_volumeConstraintPipeline;
 	Pipeline m_postsolvePipeline;
 	DescriptorSetLayout m_pbdDescriptorSetLayout;
@@ -109,16 +105,15 @@ private:
 	PipelineLayout m_deformPipelineLayout;
 	DescriptorSetLayout m_deformDescriptorSetLayout;
 	Pipeline m_deformPipeline;
-	Pipeline m_tetSkinningPipeline;
+	Pipeline m_tetDeformPipeline;
 	Pipeline m_recalcNormalsPipeline;
 	Pipeline m_normalizeNormalsPipeline;
 
 	Texture m_texture;
 	Sampler m_sampler;
 
-	SoftBody* p_currentSoftBody;
-	SoftBody m_softBody;
-	SoftBody m_softBody1;
+	std::array<SoftBody, MAX_SOFT_BODY_COUNT> m_softBodies;
+	std::array<std::vector<SoftBody>, MAX_FRAMES_IN_FLIGHT + 1> m_removeBodies; // Removed after their execution is done
 
 	Texture m_floorTexture;
 	Mesh m_floorMesh;
@@ -144,8 +139,8 @@ private:
 	ImGuiRenderer m_imGuiRenderer;
 
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-	void computePhysics(VkCommandBuffer commandBuffer);
-	void deformMesh(VkCommandBuffer commandBuffer);
+	void computePhysics(VkCommandBuffer commandBuffer, SoftBody& softBody);
+	void deformMesh(VkCommandBuffer commandBuffer, SoftBody& softBody);
 	void createSyncObjects();
 
 	void createResources();

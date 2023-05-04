@@ -25,8 +25,14 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
 
     m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_meshDescriptorSet.get(0)});
-    p_currentSoftBody->mesh.bind(commandBuffer);
-    vkCmdDrawIndexed(commandBuffer, p_currentSoftBody->mesh.getIndexCount(), 1, 0, 0, 0);
+    for (auto& softBody : m_softBodies)
+    {
+        if (softBody.active)
+        {
+            softBody.mesh.bind(commandBuffer);
+            vkCmdDrawIndexed(commandBuffer, softBody.mesh.getIndexCount(), 1, 0, 0, 0);
+        }
+    }
 
     m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_floorDescriptorSet.get(0) });
     m_floorMesh.bind(commandBuffer);
@@ -35,8 +41,14 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     if (m_renderTetMesh)
     {
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_tetPipeline.get());
-        m_tetPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), p_currentSoftBody->graphicsDescriptorSet.get(0) });
-        vkCmdDraw(commandBuffer, 12, p_currentSoftBody->tetMesh.getTetCount(), 0, 0);
+        for (auto& softBody : m_softBodies)
+        {
+            if (softBody.active)
+            {
+                m_tetPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), softBody.graphicsDescriptorSet.get(0) });
+                vkCmdDraw(commandBuffer, 12, softBody.tetMesh.getTetCount(), 0, 0);
+            }
+        }
     }
 
     vkCmdEndRenderPass(commandBuffer);
@@ -54,17 +66,17 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdEndRenderPass(commandBuffer);
 }
 
-void Renderer::computePhysics(VkCommandBuffer commandBuffer)
+void Renderer::computePhysics(VkCommandBuffer commandBuffer, SoftBody& softBody)
 {
     VkMemoryBarrier memoryBarrier = {};
     memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
     memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-    m_pbdPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, { m_pbdDescriptorSet.get(currentFrame), p_currentSoftBody->pbdDescriptorSet.get(0) });
+    m_pbdPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, { m_pbdDescriptorSet.get(currentFrame), softBody.pbdDescriptorSet.get(0) });
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_presolvePipeline.get());
-    vkCmdDispatch(commandBuffer, p_currentSoftBody->tetMesh.getParticleCount(), 1, 1);
+    vkCmdDispatch(commandBuffer, softBody.tetMesh.getParticleCount(), 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -77,8 +89,8 @@ void Renderer::computePhysics(VkCommandBuffer commandBuffer)
         0,
         nullptr);
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_distanceConstraintPipeline.get());
-    vkCmdDispatch(commandBuffer, p_currentSoftBody->tetMesh.getEdgeCount(), 1, 1);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_stretchConstraintPipeline.get());
+    vkCmdDispatch(commandBuffer, softBody.tetMesh.getEdgeCount(), 1, 1);
 
     /*vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -92,7 +104,7 @@ void Renderer::computePhysics(VkCommandBuffer commandBuffer)
         nullptr);*/
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_volumeConstraintPipeline.get());
-    vkCmdDispatch(commandBuffer, p_currentSoftBody->tetMesh.getTetCount(), 1, 1);
+    vkCmdDispatch(commandBuffer, softBody.tetMesh.getTetCount(), 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -106,7 +118,7 @@ void Renderer::computePhysics(VkCommandBuffer commandBuffer)
         nullptr);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_postsolvePipeline.get());
-    vkCmdDispatch(commandBuffer, p_currentSoftBody->tetMesh.getParticleCount(), 1, 1);
+    vkCmdDispatch(commandBuffer, softBody.tetMesh.getParticleCount(), 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -120,21 +132,21 @@ void Renderer::computePhysics(VkCommandBuffer commandBuffer)
         nullptr);
 }
 
-void Renderer::deformMesh(VkCommandBuffer commandBuffer)
+void Renderer::deformMesh(VkCommandBuffer commandBuffer, SoftBody& softBody)
 {
     VkMemoryBarrier memoryBarrier = {};
     memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
     memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-    m_deformPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, { p_currentSoftBody->deformDescriptorSet.get(0) });
+    m_deformPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, { softBody.deformDescriptorSet.get(0) });
 
-    if (p_currentSoftBody->useSkinning)
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_tetSkinningPipeline.get());
+    if (softBody.useTetDeformation)
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_tetDeformPipeline.get());
     else
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_deformPipeline.get());
 
-    vkCmdDispatch(commandBuffer, p_currentSoftBody->mesh.getVertexCount(), 1, 1);
+    vkCmdDispatch(commandBuffer, softBody.mesh.getVertexCount(), 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -148,7 +160,7 @@ void Renderer::deformMesh(VkCommandBuffer commandBuffer)
         nullptr);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_recalcNormalsPipeline.get());
-    vkCmdDispatch(commandBuffer, p_currentSoftBody->mesh.getIndexCount() / 3, 1, 1);
+    vkCmdDispatch(commandBuffer, softBody.mesh.getIndexCount() / 3, 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -162,7 +174,7 @@ void Renderer::deformMesh(VkCommandBuffer commandBuffer)
         nullptr);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_normalizeNormalsPipeline.get());
-    vkCmdDispatch(commandBuffer, p_currentSoftBody->mesh.getVertexCount(), 1, 1);
+    vkCmdDispatch(commandBuffer, softBody.mesh.getVertexCount(), 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -206,8 +218,7 @@ void Renderer::createSyncObjects()
 
 void Renderer::createResources()
 {
-    m_softBody = createSoftBody("icosphere", glm::vec3(0.0f, 5.0f, 0.0f), 50);
-    p_currentSoftBody = &m_softBody;
+    m_softBodies[0] = createSoftBody("icosphere", glm::vec3(0.0f, 5.0f, 0.0f));
 
     static uint8_t pixel[4] = { 25, 25, 205, 255 };
     m_texture.init(m_device, m_commandPool, &pixel, glm::uvec2(1, 1));
@@ -244,25 +255,20 @@ void Renderer::createResources()
     };
 
     MeshData floorMeshData = { floorVertices, floorIndices };
-    m_floorMesh.init(m_device, m_commandPool, floorMeshData);
-    m_floorTexture = ResourceManager::loadTexture("assets/textures/check.jpg");
+    m_floorMesh.init(m_device, m_commandPool, &floorMeshData);
+    m_floorTexture = m_resources.loadTexture("assets/textures/check.jpg");
 }
 
 SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset, int resolution)
 {
     SoftBody softBody;
-    MeshData mesh = ResourceManager::loadMeshOBJ("assets/models/" + name + ".obj", offset);
-    std::string resStr = resolution == 100 ? "" : std::to_string(resolution);
-    TetrahedralMeshData tetMesh = ResourceManager::loadTetrahedralMeshOBJ("assets/tet_models/" + name + resStr + ".obj", offset);
+    SoftBodyData* softBodyData = m_resources.getSoftBody(name, resolution);
 
-    if (!mesh.vertices.positions.size() || !tetMesh.particles.size())
-    {
-        softBody.active = false;
+    if (!softBodyData)
         return softBody;
-    }
 
-    softBody.mesh.init(m_device, m_commandPool, mesh);
-    softBody.tetMesh.init(m_device, m_commandPool, tetMesh);
+    softBody.mesh.init(m_device, m_commandPool, &softBodyData->mesh);
+    softBody.tetMesh.init(m_device, m_commandPool, &softBodyData->tetMesh, offset);
 
     softBody.graphicsDescriptorSet.init(m_device, m_tetDescriptorSetLayout, 1);
     softBody.graphicsDescriptorSet.writeBuffer(0, 0, softBody.tetMesh.getParticleBuffer());
@@ -283,7 +289,7 @@ SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset, int
 
     Buffer stagingBuffer;
     VkDeviceSize bufferSize = 0;
-    // No skinning
+    // No tetrahedral deformation
     if (resolution == 100)
     {
         bufferSize = sizeof(uint32_t) * softBody.mesh.getVertexCount();
@@ -291,86 +297,21 @@ SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset, int
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             bufferSize,
-            (void*)mesh.origIndices.data()
+            (void*)softBodyData->mesh.origIndices.data()
         );
-        softBody.useSkinning = false;
+        softBody.useTetDeformation = false;
     }
-    // Tetrahedral skinning
+    // Tetrahedral deformation
     else
     {
-        std::vector<SkinningInfo> skinningInfo(mesh.vertices.positions.size());
-
-        // Tetrahedral info
-        int tetCount = (int)tetMesh.tets.size();
-        std::vector<glm::vec4> tetCenters(tetCount); // w component is max radius
-        std::vector<glm::mat3> tetMatrices(tetCount);
-
-        for (int i = 0; i < tetCount; i++)
-        {
-            glm::uvec4 indices = tetMesh.tets[i].indices;
-            glm::vec3 tetCenter =
-                (tetMesh.particles[indices[0]].position +
-                tetMesh.particles[indices[1]].position +
-                tetMesh.particles[indices[2]].position +
-                tetMesh.particles[indices[3]].position) * 0.25f;
-            
-            float maxRadius = 0.0f;
-            for (int j = 0; j < 4; j++)
-            {
-                glm::vec3 diff = tetMesh.particles[indices[j]].position - tetCenter;
-                maxRadius = std::max(maxRadius, glm::dot(diff, diff));
-            }
-
-            tetCenters[i] = glm::vec4(tetCenter.x, tetCenter.y, tetCenter.z, maxRadius + 0.025f);
-            tetMatrices[i] = glm::inverse(
-                glm::mat3(
-                    tetMesh.particles[indices[0]].position - tetMesh.particles[indices[3]].position,
-                    tetMesh.particles[indices[1]].position - tetMesh.particles[indices[3]].position,
-                    tetMesh.particles[indices[2]].position - tetMesh.particles[indices[3]].position
-                )
-            );
-        }
-
-        // Apply to mesh vertices
-        for (int i = 0, len = (int)mesh.vertices.positions.size(); i < len; i++)
-        {
-            float minDist = FLT_MAX;
-            for (int j = 0; j < tetCount; j++)
-            {
-                glm::vec3 diff = mesh.vertices.positions[i].vec - glm::vec3(tetCenters[j].x, tetCenters[j].y, tetCenters[j].z);
-                float dist = glm::dot(diff, diff);
-                if (dist > tetCenters[j].w)
-                    continue;
-
-                diff = mesh.vertices.positions[i].vec - tetMesh.particles[tetMesh.tets[j].indices[3]].position;
-                diff = tetMatrices[j] * diff;
-
-                float baryCoords[4]{ diff.x, diff.y, diff.z, 1.0f - (diff.x + diff.y + diff.z) };
-                float maxDist = 0.0f;
-                for (int k = 0; k < 4; k++)
-                    maxDist = std::max(maxDist, -baryCoords[k]);
-
-                if (maxDist < minDist)
-                {
-                    minDist = maxDist;
-                    skinningInfo[i].tetId = j;
-                    skinningInfo[i].weights = glm::vec3(baryCoords[0], baryCoords[1], baryCoords[2]);
-
-                    // Surrounded by tetrhedral
-                    if (maxDist <= 0.0f)
-                        break;
-                }
-            }
-        }
-
-        bufferSize = sizeof(SkinningInfo) * (uint32_t)skinningInfo.size();
+        bufferSize = sizeof(DeformationInfo) * (uint32_t)softBodyData->deformationInfo.size();
         stagingBuffer.init(m_device,
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             bufferSize,
-            (void*)skinningInfo.data()
+            (void*)softBodyData->deformationInfo.data()
         );
-        softBody.useSkinning = true;
+        softBody.useTetDeformation = true;
     }
 
     softBody.deformBuffer.init(m_device,
@@ -435,13 +376,11 @@ void Renderer::renderImGui()
 
     ImGui::Begin("Physics Settings");
 
-    ImGui::SliderInt("Fixed time step (fps)", &m_fixedTimeStep, 10, 300);
+    ImGui::SliderInt("Fixed time step (fps)", &m_fixedTimeStep, 10, 240);
     ImGui::SliderInt("Substep count", &m_subSteps, 1, 25);
     ImGui::SliderFloat("Edge compliance", &pbd.edgeCompliance, 0.0f, 1.0f);
     ImGui::SliderFloat("Volume compliance", &pbd.volumeCompliance, 0.0f, 1.0f);
     ImGui::Checkbox("Render wireframe", &m_renderTetMesh);
-    if (ImGui::Button("Restart"))
-        p_currentSoftBody->tetMesh.reset();
 
     float timeStep = 1.0f / (float)m_fixedTimeStep;
     m_timer.setFixedDT(timeStep);
@@ -465,7 +404,7 @@ void Renderer::renderImGui()
                 stream.close();
             else
             {
-                ResourceManager::exportJPG(texture, "../screenshots/" + std::to_string(i) + ".jpg");
+                m_resources.exportJPG(texture, "../screenshots/" + std::to_string(i) + ".jpg");
                 break;
             }
         }
@@ -478,6 +417,7 @@ void Renderer::renderImGui()
     static char name[25];
     static int resolution = 100;
     static glm::vec3 offset = glm::vec3(0.0f, 5.0f, 0.0f);
+    static int num = 1;
 
     ImGui::Begin("Scene settings");
 
@@ -498,29 +438,17 @@ void Renderer::renderImGui()
     ImGui::InputText("Name", name, 100);
     ImGui::SliderInt("Resolution", &resolution, 1, 100);
     ImGui::SliderFloat3("Start offset", (float*)&offset, 0.0f, 10.0f);
+    ImGui::SliderInt("Number of bodies", &num, 1, MAX_SOFT_BODY_COUNT);
     if (ImGui::Button("Load"))
     {
-        std::ifstream stream;
-        stream.open("assets/models/" + std::string(name) + ".obj");
-        if (stream.is_open())
+        for (int i = 0; i < num; i++)
         {
-            if (p_currentSoftBody == &m_softBody)
-            {
-                m_softBody1.cleanup();
-                m_softBody1 = createSoftBody(name, offset, resolution);
-                if(m_softBody1.active)
-                    p_currentSoftBody = &m_softBody1;
-            }
-            else
-            {
-                m_softBody.cleanup();
-                m_softBody = createSoftBody(name, offset, resolution);
-                if (m_softBody.active)
-                    p_currentSoftBody = &m_softBody;
-            }
-            m_timer.reset();
+            if(m_softBodies[i].active)
+                m_removeBodies[0].push_back(m_softBodies[i]);
+            m_softBodies[i] = createSoftBody(name, offset, resolution);
         }
-        stream.close();
+
+        m_timer.reset();
     }
 
     m_camera.setPosition(camPos);
@@ -609,7 +537,7 @@ void Renderer::init(Window& window)
         m_swapChain.getRenderPass(),
         "assets/spv/tetrahedral.vert.spv",
         "assets/spv/simple.frag.spv",
-        { VK_POLYGON_MODE_LINE, false, false},
+        { VK_POLYGON_MODE_LINE, true, false},
         VERTEX_STREAM_INPUT_NONE
     );
 
@@ -628,7 +556,7 @@ void Renderer::init(Window& window)
     m_pbdDescriptorSet.init(m_device, m_pbdDescriptorSetLayout, 0, MAX_FRAMES_IN_FLIGHT);
     m_pbdPipelineLayout.init(m_device, &m_pbdDescriptorSetLayout);
     m_presolvePipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/presolve.comp.spv");
-    m_distanceConstraintPipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/distance_constraint.comp.spv");
+    m_stretchConstraintPipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/stretch_constraint.comp.spv");
     m_volumeConstraintPipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/volume_constraint.comp.spv");
     m_postsolvePipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/postsolve.comp.spv");
 
@@ -645,7 +573,7 @@ void Renderer::init(Window& window)
     });
     m_deformPipelineLayout.init(m_device, &m_deformDescriptorSetLayout);
     m_deformPipeline.initCompute(m_device, m_deformPipelineLayout, "assets/spv/deform.comp.spv");
-    m_tetSkinningPipeline.initCompute(m_device, m_deformPipelineLayout, "assets/spv/tetrahedral_skinning.comp.spv");
+    m_tetDeformPipeline.initCompute(m_device, m_deformPipelineLayout, "assets/spv/tetrahedral_deform.comp.spv");
     m_recalcNormalsPipeline.initCompute(m_device, m_deformPipelineLayout, "assets/spv/recalculate_normals.comp.spv");
     m_normalizeNormalsPipeline.initCompute(m_device, m_deformPipelineLayout, "assets/spv/normalize_normals.comp.spv");
 
@@ -667,7 +595,7 @@ void Renderer::init(Window& window)
     createSyncObjects();
 
     m_imGuiRenderer.init(window, m_instance, m_device, m_swapChain, m_commandPool);
-    ResourceManager::init(m_device, m_commandPool);
+    m_resources.init(m_device, m_commandPool);
 
     createResources();
 
@@ -690,8 +618,8 @@ void Renderer::cleanup()
 
     m_imGuiRenderer.cleanup();
 
-    m_softBody.cleanup();
-    m_softBody1.cleanup();
+    for (auto& softBody : m_softBodies)
+        softBody.cleanup();
 
     m_floorTexture.cleanup();
     m_floorMesh.cleanup();
@@ -723,14 +651,14 @@ void Renderer::cleanup()
 
     m_normalizeNormalsPipeline.cleanup();
     m_recalcNormalsPipeline.cleanup();
-    m_tetSkinningPipeline.cleanup();
+    m_tetDeformPipeline.cleanup();
     m_deformPipeline.cleanup();
     m_deformPipelineLayout.cleanup();
     m_deformDescriptorSetLayout.cleanup();
 
     m_postsolvePipeline.cleanup();
     m_volumeConstraintPipeline.cleanup();
-    m_distanceConstraintPipeline.cleanup();
+    m_stretchConstraintPipeline.cleanup();
     m_presolvePipeline.cleanup();
     m_pbdPipelineLayout.cleanup();
 
@@ -771,10 +699,27 @@ void Renderer::render()
     m_computeCommandBufferArray.begin(currentFrame);
     if (m_timer.passedFixedDT())
     {
-        for(int i = 0; i < m_subSteps; i++)
-            computePhysics(m_computeCommandBufferArray[currentFrame]);
+        for (auto& softBody : m_softBodies)
+        {
+            if (softBody.active)
+            {
+                for (int i = 0; i < m_subSteps; i++)
+                    computePhysics(m_computeCommandBufferArray[currentFrame], softBody);
 
-        deformMesh(m_computeCommandBufferArray[currentFrame]);
+                deformMesh(m_computeCommandBufferArray[currentFrame], softBody);
+            }
+        }
+
+        // Shift vectors to next 'frame'
+        for (int i = MAX_FRAMES_IN_FLIGHT; i > 0; i--)
+        {
+            m_removeBodies[i] = m_removeBodies[i - 1];
+        }
+        m_removeBodies[0].clear();
+
+        // Remove soft bodies outside of max frames in flight scope
+        for (auto& remove : m_removeBodies.back())
+            remove.cleanup();
     }
      m_computeCommandBufferArray.end(currentFrame);
 

@@ -8,9 +8,6 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 
-Device* ResourceManager::s_device = nullptr;
-CommandPool* ResourceManager::s_commandPool = nullptr;
-
 void ResourceManager::init(Device& device, CommandPool& commandPool)
 {
     s_device = &device;
@@ -45,7 +42,7 @@ void ResourceManager::exportJPG(Texture& texture, const std::string& path)
     vkUnmapMemory(s_device->getLogical(), texture.getMemory());
 }
 
-MeshData ResourceManager::loadMeshOBJ(const std::string& path, glm::vec3 offset)
+MeshData ResourceManager::loadMeshOBJ(const std::string& path)
 {
     MeshData mesh;
     fastObjMesh* obj = fast_obj_read(path.c_str());
@@ -74,7 +71,7 @@ MeshData ResourceManager::loadMeshOBJ(const std::string& path, glm::vec3 offset)
                 obj->positions[obj->indices[i].p * 3],
                 obj->positions[obj->indices[i].p * 3 + 1],
                 obj->positions[obj->indices[i].p * 3 + 2]
-            ) + offset });
+            ) });
             mesh.vertices.normals.push_back({ glm::vec3(
                 obj->normals[obj->indices[i].n * 3],
                 obj->normals[obj->indices[i].n * 3 + 1],
@@ -171,9 +168,102 @@ TetrahedralMeshData ResourceManager::loadTetrahedralMeshOBJ(const std::string& p
     for (unsigned int i = 0; i < obj->position_count - 1; i++)
     {
         mesh.particles[i].invMass = 1.0f / mesh.particles[i].invMass;
-        //std::cout << "invMass " << i << ": " << mesh.particles[i].invMass << "\n";
     }
 
     fast_obj_destroy(obj);
     return mesh;
+}
+
+SoftBodyData* ResourceManager::getSoftBody(std::string name, int resolution)
+{
+    std::string key = name + std::to_string(resolution);
+    if (softBodyModels.count(key))
+    {
+        return &softBodyModels[key];
+    }
+
+    SoftBodyData data;
+    data.mesh = ResourceManager::loadMeshOBJ("assets/models/" + name + ".obj");
+    data.tetMesh = ResourceManager::loadTetrahedralMeshOBJ("assets/tet_models/" + name + "/" + std::to_string(resolution) + ".obj");
+
+    if (!data.mesh.vertices.positions.size() || !data.tetMesh.particles.size())
+    {
+        return nullptr;
+    }
+
+    // Barycentric weights
+    if(resolution != 100)
+    {
+        data.deformationInfo.resize(data.mesh.vertices.positions.size());
+        // Tetrahedral info
+        int tetCount = (int)data.tetMesh.tets.size();
+        std::vector<glm::vec4> tetCenters(tetCount); // w component is max radius
+        std::vector<glm::mat3> tetMatrices(tetCount);
+
+        for (int i = 0; i < tetCount; i++)
+        {
+            glm::uvec4 indices = data.tetMesh.tets[i].indices;
+            glm::vec3 tetCenter =
+                (data.tetMesh.particles[indices[0]].position +
+                    data.tetMesh.particles[indices[1]].position +
+                    data.tetMesh.particles[indices[2]].position +
+                    data.tetMesh.particles[indices[3]].position) * 0.25f;
+
+            float maxRadius = 0.0f;
+            for (int j = 0; j < 4; j++)
+            {
+                glm::vec3 diff = data.tetMesh.particles[indices[j]].position - tetCenter;
+                maxRadius = std::max(maxRadius, glm::dot(diff, diff));
+            }
+
+            tetCenters[i] = glm::vec4(tetCenter.x, tetCenter.y, tetCenter.z, maxRadius + 0.025f);
+            tetMatrices[i] = glm::inverse(
+                glm::mat3(
+                    data.tetMesh.particles[indices[0]].position - data.tetMesh.particles[indices[3]].position,
+                    data.tetMesh.particles[indices[1]].position - data.tetMesh.particles[indices[3]].position,
+                    data.tetMesh.particles[indices[2]].position - data.tetMesh.particles[indices[3]].position
+                )
+            );
+        }
+
+        // Apply to mesh vertices
+        for (int i = 0, len = (int)data.deformationInfo.size(); i < len; i++)
+        {
+            float minDist = FLT_MAX;
+            for (int j = 0; j < tetCount; j++)
+            {
+                glm::vec3 diff = data.mesh.vertices.positions[i].vec - glm::vec3(tetCenters[j].x, tetCenters[j].y, tetCenters[j].z);
+                float dist = glm::dot(diff, diff);
+                if (dist > tetCenters[j].w)
+                    continue;
+
+                diff = data.mesh.vertices.positions[i].vec - data.tetMesh.particles[data.tetMesh.tets[j].indices[3]].position;
+                diff = tetMatrices[j] * diff;
+
+                float baryCoords[4]{ diff.x, diff.y, diff.z, 1.0f - (diff.x + diff.y + diff.z) };
+                float maxDist = 0.0f;
+                for (int k = 0; k < 4; k++)
+                    maxDist = std::max(maxDist, -baryCoords[k]);
+
+                if (maxDist < minDist)
+                {
+                    minDist = maxDist;
+                    data.deformationInfo[i].tetId = j;
+                    data.deformationInfo[i].weights = glm::vec3(baryCoords[0], baryCoords[1], baryCoords[2]);
+
+                    // Surrounded by tetrhedral
+                    if (maxDist <= 0.0f)
+                        break;
+                }
+            }
+        }
+    }
+
+    softBodyModels.insert(
+        std::pair<std::string, SoftBodyData>
+        (
+            key, data     
+        )
+    );
+    return &softBodyModels[key];
 }

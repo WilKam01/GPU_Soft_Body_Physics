@@ -37,7 +37,7 @@ class Mesh
 {
 private:
 	Device* p_device;
-	MeshData m_meshData;
+	MeshData* p_meshData;
 
 	std::vector<Buffer> m_vertexBuffers;
 	Buffer m_indexBuffer;
@@ -52,7 +52,7 @@ private:
 	template <typename T, typename B>
 	void addVertexBuffer(CommandPool& commandPool, const std::vector<T>& stream, bool isSBO = false);
 public:
-	void init(Device& device, CommandPool& commandPool, MeshData& meshData);
+	void init(Device& device, CommandPool& commandPool, MeshData* meshData);
 	void cleanup();
 
 	void bind(VkCommandBuffer commandBuffer);
@@ -61,8 +61,6 @@ public:
 	inline Buffer& getIndexBuffer() { return m_indexBuffer; }
 	inline uint32_t getVertexCount() { return m_vertexCount; }
 	inline uint32_t getIndexCount() { return m_indexCount; }
-
-	inline uint32_t getIndex(size_t i) { return m_meshData.indices[i]; }
 };
 
 template<typename T, typename B>
