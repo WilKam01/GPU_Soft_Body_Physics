@@ -5,6 +5,13 @@ layout(set = 0, binding = 0) uniform UBO
     float deltaTime;
 } ubo;
 
+layout(set = 1, binding = 0) uniform InfoUBO
+{
+    uint particleCount;
+    uint edgeCount;
+    uint tetrahedralCount;
+} info;
+
 struct Particle
 {
     vec3 position;
@@ -12,7 +19,7 @@ struct Particle
 	float invMass;
 };
 
-layout(std140, set = 1, binding = 0) buffer ParticlesSSBO
+layout(std140, set = 1, binding = 1) buffer ParticlesSSBO
 {
 	Particle particles[];
 };
@@ -23,16 +30,19 @@ struct PbdPositions
     vec3 delta;
 };
 
-layout(std140, set = 1, binding = 1) buffer PositionsSSBO
+layout(std140, set = 1, binding = 2) buffer PositionsSSBO
 {
 	PbdPositions positions[];
 };
 
-layout(local_size_x = 1) in;
+layout(local_size_x = 32) in;
 
 void main()
 {
 	uint index = gl_GlobalInvocationID.x;
+	if(index >= info.particleCount)
+		return;
+
 	positions[index].predict += positions[index].delta * 0.2;
 	particles[index].velocity = (positions[index].predict - particles[index].position) / ubo.deltaTime;
 }

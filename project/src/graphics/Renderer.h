@@ -46,6 +46,10 @@ struct SoftBody
 	// Buffer used to deform the original mesh, either directly in the form of indices or in the form of tetrahedral deformation
 	Buffer deformBuffer;
 
+	// UBO information in pbd and deform shaders
+	UniformBuffer<glm::uvec3> pbdUBO; // (particleCount, edgeCount, tetrahedralCount)
+	UniformBuffer<glm::uvec2> deformUBO; // (vertexCount, indexCount)
+
 	bool active = false;
 	void cleanup()
 	{
@@ -55,6 +59,8 @@ struct SoftBody
 			deformDescriptorSet.cleanup();
 			pbdDescriptorSet.cleanup();
 			graphicsDescriptorSet.cleanup();
+			deformUBO.cleanup();
+			pbdUBO.cleanup();
 			tetMesh.cleanup();
 			mesh.cleanup();
 		}
@@ -75,7 +81,7 @@ private:
 	ResourceManager m_resources;
 
 	int m_fixedTimeStep = 60;
-	int m_subSteps = 10;
+	int m_subSteps = 20;
 	bool m_renderTetMesh = true;
 
 	Instance m_instance;
@@ -113,14 +119,16 @@ private:
 	Texture m_texture;
 	Sampler m_sampler;
 
-	std::array<SoftBody, MAX_SOFT_BODY_COUNT> m_softBodies;
+	std::array<SoftBody, MAX_SOFT_BODY_COUNT>* p_currentSoftBodies;
+	std::array<SoftBody, MAX_SOFT_BODY_COUNT> m_softBodies0;
+	std::array<SoftBody, MAX_SOFT_BODY_COUNT> m_softBodies1;
 	std::array<std::vector<SoftBody>, MAX_FRAMES_IN_FLIGHT + 1> m_removeBodies; // Removed after their execution is done
 
 	// Measurement related
 	uint32_t m_measureFrameCounter = MAX_FRAME_MEASUREMENT_COUNT;
 	bool m_measureFPS; // true : measure fps of model, false: measure error
 
-	char m_modelName[25] = "icosphere";
+	char m_modelName[25] = "sphere";
 	int m_modelResolution = 100;
 	int m_modelCount = 1;
 	int m_frameCount = 100;

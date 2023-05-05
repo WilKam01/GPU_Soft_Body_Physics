@@ -40,5 +40,5 @@ void main()
 
     vec3 pos = particles[tetrahedrals[gl_InstanceIndex].indices[indices[gl_VertexIndex]]].position.xyz;
     gl_Position = ubo.viewProj * vec4(pos, 1.0);
-    fragColor = vec3(0.5);
+    fragColor = vec3(1.0 / gl_Position.z);
 }

@@ -1,10 +1,16 @@
 #version 450
 
-layout(std140, set = 0, binding = 0) buffer VertexPositionsSSBO
+layout(set = 0, binding = 0) uniform InfoUBO
+{
+    uint vertexCount;
+    uint indexCount;
+} info;
+
+layout(std140, set = 0, binding = 1) buffer VertexPositionsSSBO
 {
 	vec3 vertexPositions[];
 };
-layout(std140, set = 0, binding = 1) buffer VertexNormalsSSBO
+layout(std140, set = 0, binding = 2) buffer VertexNormalsSSBO
 {
 	vec3 vertexNormals[];
 };
@@ -15,7 +21,7 @@ struct PbdPositions
     vec3 delta;
 };
 
-layout(std140, set = 0, binding = 3) buffer PositionsSSBO
+layout(std140, set = 0, binding = 4) buffer PositionsSSBO
 {
 	PbdPositions positions[];
 };
@@ -26,7 +32,7 @@ struct SkinningInfo
 	uint tetIndex;
 };
 
-layout(std430, set = 0, binding = 4) buffer TetSkinningSSBO
+layout(std430, set = 0, binding = 5) buffer TetSkinningSSBO
 {
 	SkinningInfo skinning[];
 };
@@ -37,16 +43,19 @@ struct Tetrahedral
     float restVolume;
 };
 
-layout(std140, set = 0, binding = 5) readonly buffer TetrahedralSSBO
+layout(std140, set = 0, binding = 6) readonly buffer TetrahedralSSBO
 {
 	Tetrahedral tetrahedrals[];
 };
 
-layout(local_size_x = 1) in;
+layout(local_size_x = 32) in;
 
 void main()
 {
 	uint index = gl_GlobalInvocationID.x;
+	if(index >= info.vertexCount)
+		return;
+
 	vertexNormals[index] = vec3(0.0);
 	SkinningInfo skin = skinning[index];
 

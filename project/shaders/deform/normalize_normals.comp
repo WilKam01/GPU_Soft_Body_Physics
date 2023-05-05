@@ -1,14 +1,23 @@
 #version 450
 
-layout(std140, set = 0, binding = 1) buffer VertexNormalsSSBO
+layout(set = 0, binding = 0) uniform InfoUBO
+{
+    uint vertexCount;
+    uint indexCount;
+} info;
+
+layout(std140, set = 0, binding = 2) buffer VertexNormalsSSBO
 {
 	vec3 vertexNormals[];
 };
 
-layout(local_size_x = 1) in;
+layout(local_size_x = 32) in;
 
 void main()
 {
 	uint index = gl_GlobalInvocationID.x;
+	if(index >= info.vertexCount)
+		return;
+
 	vertexNormals[index] = normalize(vertexNormals[index]);
 }

@@ -5,6 +5,7 @@ mkdir screenshots
 mkdir measurements
 mkdir measurements\fps
 mkdir measurements\error
+mkdir measurements\error_center
 mkdir measurements\position
 popd
 PAUSE

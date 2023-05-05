@@ -11,6 +11,7 @@ int main()
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 
+    srand((unsigned int)time(0));
     s_window.init("softbody simulation", 1280, 720);
     s_renderer.init(s_window);
 

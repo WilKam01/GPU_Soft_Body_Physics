@@ -33,7 +33,7 @@ public:
 	MeshData loadMeshOBJ(const std::string& path);
 
 	// Note: The face format in the obj file must be quadratic
-	TetrahedralMeshData loadTetrahedralMeshOBJ(const std::string& path, glm::vec3 offset = glm::vec3(0.0f));
+	TetrahedralMeshData loadTetrahedralMeshOBJ(const std::string& path);
 
 	SoftBodyData* getSoftBody(std::string name, int resolution);
 };

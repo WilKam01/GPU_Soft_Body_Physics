@@ -92,7 +92,7 @@ MeshData ResourceManager::loadMeshOBJ(const std::string& path)
     return mesh;
 }
 
-TetrahedralMeshData ResourceManager::loadTetrahedralMeshOBJ(const std::string& path, glm::vec3 offset)
+TetrahedralMeshData ResourceManager::loadTetrahedralMeshOBJ(const std::string& path)
 {
     TetrahedralMeshData mesh;
     fastObjMesh* obj = fast_obj_read(path.c_str());
@@ -117,7 +117,8 @@ TetrahedralMeshData ResourceManager::loadTetrahedralMeshOBJ(const std::string& p
             obj->positions[i * 3],
             obj->positions[i * 3 + 1],
             obj->positions[i * 3 + 2]
-        ) + offset;
+        );
+        mesh.particles[i - 1].invMass = 0.0f;
     }
 
     std::set<std::string> uniqueEdges;
@@ -142,11 +143,11 @@ TetrahedralMeshData ResourceManager::loadTetrahedralMeshOBJ(const std::string& p
 
         if (volume > 0.0f)
         {
-            float invMass = volume / 4.0f;
-            mesh.particles[ids[0]].invMass += invMass;
-            mesh.particles[ids[1]].invMass += invMass;
-            mesh.particles[ids[2]].invMass += invMass;
-            mesh.particles[ids[3]].invMass += invMass;
+            float mass = volume / 4.0f;
+            mesh.particles[ids[0]].invMass += mass;
+            mesh.particles[ids[1]].invMass += mass;
+            mesh.particles[ids[2]].invMass += mass;
+            mesh.particles[ids[3]].invMass += mass;
         }
 
         // Edges

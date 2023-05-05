@@ -8,6 +8,13 @@ layout(set = 0, binding = 0) uniform UBO
 	float volumeCompliance;
 } ubo;
 
+layout(set = 1, binding = 0) uniform InfoUBO
+{
+    uint particleCount;
+    uint edgeCount;
+    uint tetrahedralCount;
+} info;
+
 struct Particle
 {
     vec3 position;
@@ -15,7 +22,7 @@ struct Particle
 	float invMass;
 };
 
-layout(std140, set = 1, binding = 0) buffer ParticlesSSBO
+layout(std140, set = 1, binding = 1) buffer ParticlesSSBO
 {
 	Particle particles[];
 };
@@ -26,7 +33,7 @@ struct PbdPositions
     vec3 delta;
 };
 
-layout(std140, set = 1, binding = 1) buffer PositionsSSBO
+layout(std140, set = 1, binding = 2) buffer PositionsSSBO
 {
 	PbdPositions positions[];
 };
@@ -37,17 +44,20 @@ struct Edge
 	float restLen;
 };
 
-layout(std140, set = 1, binding = 2) buffer EdgesSSBO
+layout(std140, set = 1, binding = 3) buffer EdgesSSBO
 {
 	Edge edges[];
 };
 
-layout(local_size_x = 1) in;
+layout(local_size_x = 32) in;
 
 void main()
 {
-	float alpha = ubo.distanceCompliance / 100.0 / ubo.deltaTime / ubo.deltaTime;
 	uint index = gl_GlobalInvocationID.x;
+	if(index >= info.edgeCount)
+		return;
+
+	float alpha = (ubo.distanceCompliance) / (ubo.deltaTime * ubo.deltaTime);
 
 	float w = particles[edges[index].indices[0]].invMass + particles[edges[index].indices[1]].invMass;
 	if(w == 0.0)

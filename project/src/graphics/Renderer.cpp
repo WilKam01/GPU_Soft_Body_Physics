@@ -25,7 +25,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
 
     m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_meshDescriptorSet.get(0)});
-    for (auto& softBody : m_softBodies)
+    for (auto& softBody : *p_currentSoftBodies)
     {
         if (softBody.active)
         {
@@ -41,7 +41,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     if (m_renderTetMesh)
     {
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_tetPipeline.get());
-        for (auto& softBody : m_softBodies)
+        for (auto& softBody : *p_currentSoftBodies)
         {
             if (softBody.active)
             {
@@ -76,7 +76,7 @@ void Renderer::computePhysics(VkCommandBuffer commandBuffer, SoftBody& softBody)
     m_pbdPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, { m_pbdDescriptorSet.get(currentFrame), softBody.pbdDescriptorSet.get(0) });
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_presolvePipeline.get());
-    vkCmdDispatch(commandBuffer, softBody.tetMesh.getParticleCount(), 1, 1);
+    vkCmdDispatch(commandBuffer, (softBody.tetMesh.getParticleCount() + 31) / 32, 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -90,10 +90,10 @@ void Renderer::computePhysics(VkCommandBuffer commandBuffer, SoftBody& softBody)
         nullptr);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_stretchConstraintPipeline.get());
-    vkCmdDispatch(commandBuffer, softBody.tetMesh.getEdgeCount(), 1, 1);
+    vkCmdDispatch(commandBuffer, (softBody.tetMesh.getEdgeCount() + 31) / 32, 1, 1);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_volumeConstraintPipeline.get());
-    vkCmdDispatch(commandBuffer, softBody.tetMesh.getTetCount(), 1, 1);
+    vkCmdDispatch(commandBuffer, (softBody.tetMesh.getTetCount() + 31) / 32, 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -107,7 +107,7 @@ void Renderer::computePhysics(VkCommandBuffer commandBuffer, SoftBody& softBody)
         nullptr);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_postsolvePipeline.get());
-    vkCmdDispatch(commandBuffer, softBody.tetMesh.getParticleCount(), 1, 1);
+    vkCmdDispatch(commandBuffer, (softBody.tetMesh.getParticleCount() + 31) / 32, 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -135,7 +135,7 @@ void Renderer::deformMesh(VkCommandBuffer commandBuffer, SoftBody& softBody)
     else
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_deformPipeline.get());
 
-    vkCmdDispatch(commandBuffer, softBody.mesh.getVertexCount(), 1, 1);
+    vkCmdDispatch(commandBuffer, (softBody.mesh.getVertexCount() + 31) / 32, 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -149,7 +149,7 @@ void Renderer::deformMesh(VkCommandBuffer commandBuffer, SoftBody& softBody)
         nullptr);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_recalcNormalsPipeline.get());
-    vkCmdDispatch(commandBuffer, softBody.mesh.getIndexCount() / 3, 1, 1);
+    vkCmdDispatch(commandBuffer, (softBody.mesh.getIndexCount() / 3 + 31) / 32, 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -163,7 +163,7 @@ void Renderer::deformMesh(VkCommandBuffer commandBuffer, SoftBody& softBody)
         nullptr);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_normalizeNormalsPipeline.get());
-    vkCmdDispatch(commandBuffer, softBody.mesh.getVertexCount(), 1, 1);
+    vkCmdDispatch(commandBuffer, (softBody.mesh.getVertexCount() + 31) / 32, 1, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -207,10 +207,10 @@ void Renderer::createSyncObjects()
 
 void Renderer::createResources()
 {
-    m_softBodies[0] = createSoftBody(m_modelName, glm::vec3(0.0f, 5.0f, 0.0f));
+    m_softBodies0[0] = createSoftBody(m_modelName, glm::vec3(0.0f, 5.0f, 0.0f));
+    p_currentSoftBodies = &m_softBodies0;
 
-    static uint8_t pixel[4] = { 25, 25, 205, 255 };
-    m_texture.init(m_device, m_commandPool, &pixel, glm::uvec2(1, 1));
+    m_texture = m_resources.loadTexture("assets/textures/texture.jpg");
     m_sampler.init(m_device);
 
     static float scale = 200.0f;
@@ -259,22 +259,27 @@ SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset, int
     softBody.mesh.init(m_device, m_commandPool, &softBodyData->mesh);
     softBody.tetMesh.init(m_device, m_commandPool, &softBodyData->tetMesh, offset);
 
+    softBody.pbdUBO.init(m_device, glm::uvec3(softBody.tetMesh.getParticleCount(), softBody.tetMesh.getEdgeCount(), softBody.tetMesh.getTetCount()));
+    softBody.deformUBO.init(m_device, glm::uvec2(softBody.mesh.getVertexCount(), softBody.mesh.getIndexCount()));
+
     softBody.graphicsDescriptorSet.init(m_device, m_tetDescriptorSetLayout, 1);
     softBody.graphicsDescriptorSet.writeBuffer(0, 0, softBody.tetMesh.getParticleBuffer());
     softBody.graphicsDescriptorSet.writeBuffer(0, 1, softBody.tetMesh.getTetBuffer());
 
     softBody.pbdDescriptorSet.init(m_device, m_pbdDescriptorSetLayout, 1);
-    softBody.pbdDescriptorSet.writeBuffer(0, 0, softBody.tetMesh.getParticleBuffer());
-    softBody.pbdDescriptorSet.writeBuffer(0, 1, softBody.tetMesh.getPbdPosBuffer());
-    softBody.pbdDescriptorSet.writeBuffer(0, 2, softBody.tetMesh.getEdgeBuffer());
-    softBody.pbdDescriptorSet.writeBuffer(0, 3, softBody.tetMesh.getTetBuffer());
+    softBody.pbdDescriptorSet.writeBuffer(0, 0, softBody.pbdUBO);
+    softBody.pbdDescriptorSet.writeBuffer(0, 1, softBody.tetMesh.getParticleBuffer());
+    softBody.pbdDescriptorSet.writeBuffer(0, 2, softBody.tetMesh.getPbdPosBuffer());
+    softBody.pbdDescriptorSet.writeBuffer(0, 3, softBody.tetMesh.getEdgeBuffer());
+    softBody.pbdDescriptorSet.writeBuffer(0, 4, softBody.tetMesh.getTetBuffer());
 
     softBody.deformDescriptorSet.init(m_device, m_deformDescriptorSetLayout, 0);
-    softBody.deformDescriptorSet.writeBuffer(0, 0, softBody.mesh.getVertexBuffer(0));
-    softBody.deformDescriptorSet.writeBuffer(0, 1, softBody.mesh.getVertexBuffer(1));
-    softBody.deformDescriptorSet.writeBuffer(0, 2, softBody.mesh.getIndexBuffer());
-    softBody.deformDescriptorSet.writeBuffer(0, 3, softBody.tetMesh.getPbdPosBuffer());
-    softBody.deformDescriptorSet.writeBuffer(0, 5, softBody.tetMesh.getTetBuffer());
+    softBody.deformDescriptorSet.writeBuffer(0, 0, softBody.deformUBO);
+    softBody.deformDescriptorSet.writeBuffer(0, 1, softBody.mesh.getVertexBuffer(0));
+    softBody.deformDescriptorSet.writeBuffer(0, 2, softBody.mesh.getVertexBuffer(1));
+    softBody.deformDescriptorSet.writeBuffer(0, 3, softBody.mesh.getIndexBuffer());
+    softBody.deformDescriptorSet.writeBuffer(0, 4, softBody.tetMesh.getPbdPosBuffer());
+    softBody.deformDescriptorSet.writeBuffer(0, 6, softBody.tetMesh.getTetBuffer());
 
     Buffer stagingBuffer;
     VkDeviceSize bufferSize = 0;
@@ -312,7 +317,7 @@ SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset, int
     m_commandPool.copyBuffer(stagingBuffer, softBody.deformBuffer, bufferSize);
     stagingBuffer.cleanup();
 
-    softBody.deformDescriptorSet.writeBuffer(0, 4, softBody.deformBuffer);
+    softBody.deformDescriptorSet.writeBuffer(0, 5, softBody.deformBuffer);
     softBody.active = true;
 
     return softBody;
@@ -351,45 +356,209 @@ void Renderer::renderImGui()
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    if (!m_renderImGui)
+    glm::vec3 moveDir(
+        (float)ImGui::IsKeyDown(ImGuiKey_D) - (float)ImGui::IsKeyDown(ImGuiKey_A), 
+        (float)ImGui::IsKeyDown(ImGuiKey_Q) - (float)ImGui::IsKeyDown(ImGuiKey_E),
+        (float)ImGui::IsKeyDown(ImGuiKey_S) - (float)ImGui::IsKeyDown(ImGuiKey_W)
+    );
+    if(moveDir != glm::vec3(0.0f))
+        moveDir = glm::normalize(moveDir);
+
+    static GraphicsUBO& ubo = m_graphicsUBO[currentFrame].get();
+    static bool takeInput = false;
+
+    //------------------------------------------
+
+    if (m_renderImGui)
     {
-        ImGui::Render();
-        return;
+        ImGui::Begin("Stats");
+
+        float averageDT = m_timer.getAverageDT();
+        ImGui::Text("runtime: %.3f s", m_timer.getTotal());
+        ImGui::Text("average delta: %.4f ms", averageDT * 1000.0f);
+        ImGui::Text("average FPS: %.3f", 1.0f / averageDT);
+
+        ImGui::End();
+
+        static PbdUBO& pbd = m_pbdUBO[currentFrame].get();
+
+        ImGui::Begin("Physics Settings");
+
+        ImGui::SliderInt("Fixed time step (fps)", &m_fixedTimeStep, 10, 240);
+        ImGui::SliderInt("Substep count", &m_subSteps, 1, 25);
+        ImGui::SliderFloat("Edge compliance", &pbd.edgeCompliance, 0.0f, 1.0f);
+        ImGui::SliderFloat("Volume compliance", &pbd.volumeCompliance, 0.0f, 1.0f);
+        ImGui::Checkbox("Render wireframe", &m_renderTetMesh);
+
+        float timeStep = 1.0f / (float)m_fixedTimeStep;
+        m_timer.setFixedDT(timeStep);
+        pbd.deltaTime = timeStep / m_subSteps;
+
+        m_pbdUBO[currentFrame].get() = pbd;
+        m_pbdUBO[currentFrame].update();
+
+        ImGui::End();
+
+        static glm::vec3 offset = glm::vec3(0.0f, 5.0f, 0.0f);
+        static glm::vec3 randOffset = glm::vec3(3.0f);
+
+        ImGui::Begin("Scene settings");
+
+        ImGui::SliderFloat4("Global ambient", (float*)&ubo.globalAmbient, 0.0f, 1.0f);
+        ImGui::SliderFloat3("Light position", (float*)&ubo.lightPos, -10.0f, 10.0f);
+        ImGui::SliderFloat("Light intensity", &ubo.lightIntensity, -1.0f, 10.0f);
+        ImGui::SliderFloat("Light cone", &ubo.lightCone, 0.0f, 1.0f);
+        ImGui::SliderFloat("Specular power", &ubo.specPower, 0.0f, 100.0f);
+
+        ImGui::Text("");
+        ImGui::Text("Soft body model");
+        ImGui::InputText("Name", m_modelName, 25);
+        takeInput = !ImGui::IsItemActive();
+        ImGui::SliderInt("Resolution", &m_modelResolution, 1, 100);
+        ImGui::SliderFloat3("Start offset", (float*)&offset, 0.0f, 10.0f);
+        ImGui::SliderFloat3("Rand offset", (float*)&randOffset, 0.0f, 6.0f);
+        ImGui::SliderInt("Number of bodies", &m_modelCount, 1, MAX_SOFT_BODY_COUNT);
+        ImGui::SliderInt("Frame measure count", &m_frameCount, 100, MAX_FRAME_MEASUREMENT_COUNT);
+
+        if (ImGui::Button("Load"))
+        {
+            if (p_currentSoftBodies == &m_softBodies0)
+            {
+                p_currentSoftBodies = &m_softBodies1;
+                for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
+                {
+                    if (!m_softBodies1[i].active)
+                        break;
+                    m_softBodies1[i].cleanup();
+                }
+            }
+            else
+            {
+                p_currentSoftBodies = &m_softBodies0;
+                for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
+                {
+                    if (!m_softBodies0[i].active)
+                        break;
+                    m_softBodies0[i].cleanup();
+                }
+            }
+
+            if (m_modelCount == 1)
+            {
+                (*p_currentSoftBodies)[0] = createSoftBody(m_modelName, offset, m_modelResolution);
+            }
+            else
+            {
+                for (int i = 0; i < m_modelCount; i++)
+                {
+                    glm::vec3 startOffset = offset +
+                        glm::vec3(
+                            (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1),
+                            (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1),
+                            (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1)
+                        ) * randOffset;
+                    (*p_currentSoftBodies)[i] = createSoftBody(m_modelName, startOffset, m_modelResolution);
+                }
+            }
+
+            m_timer.reset();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Measure FPS") && m_measureFrameCounter == MAX_FRAME_MEASUREMENT_COUNT)
+        {
+            m_avgFPS = std::vector<float>(m_frameCount, 0.0f);
+            m_measureFPS = true;
+            m_measureFrameCounter = 0;
+
+            if (p_currentSoftBodies == &m_softBodies0)
+            {
+                p_currentSoftBodies = &m_softBodies1;
+                for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
+                {
+                    if (!m_softBodies1[i].active)
+                        break;
+                    m_softBodies1[i].cleanup();
+                }
+            }
+            else
+            {
+                p_currentSoftBodies = &m_softBodies0;
+                for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
+                {
+                    if (!m_softBodies0[i].active)
+                        break;
+                    m_softBodies0[i].cleanup();
+                }
+            }
+
+            if (m_modelCount == 1)
+            {
+                (*p_currentSoftBodies)[0] = createSoftBody(m_modelName, offset, m_modelResolution);
+            }
+            else
+            {
+                for (int i = 0; i < m_modelCount; i++)
+                {
+                    glm::vec3 startOffset = offset +
+                        glm::vec3(
+                            (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1),
+                            (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1),
+                            (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1)
+                        ) * randOffset;
+                    (*p_currentSoftBodies)[i] = createSoftBody(m_modelName, startOffset, m_modelResolution);
+                }
+            }
+
+            m_timer.reset();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Measure Error") && m_measureFrameCounter == MAX_FRAME_MEASUREMENT_COUNT)
+        {
+            m_avgError = std::vector<float>(m_frameCount, 0.0f);
+            m_avgCenterError = std::vector<float>(m_frameCount, 0.0f);
+            m_avgCenterPos[0] = std::vector<glm::vec3>(m_frameCount, glm::vec3(0.0f));
+            m_avgCenterPos[1] = std::vector<glm::vec3>(m_frameCount, glm::vec3(0.0f));
+            m_measureFPS = false;
+            m_measureFrameCounter = 0;
+
+            if (p_currentSoftBodies == &m_softBodies0)
+            {
+                p_currentSoftBodies = &m_softBodies1;
+                for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
+                {
+                    if (!m_softBodies1[i].active)
+                        break;
+                    m_softBodies1[i].cleanup();
+                }
+            }
+            else
+            {
+                p_currentSoftBodies = &m_softBodies0;
+                for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
+                {
+                    if (!m_softBodies0[i].active)
+                        break;
+                    m_softBodies0[i].cleanup();
+                }
+            }
+            (*p_currentSoftBodies)[0] = createSoftBody(m_modelName, offset, 100);
+            (*p_currentSoftBodies)[1] = createSoftBody(m_modelName, offset, m_modelResolution);
+
+            m_timer.reset();
+        }
+        ImGui::End();
     }
 
     //------------------------------------------
 
-    ImGui::Begin("Stats");
+    if (ImGui::IsKeyPressed(ImGuiKey_H) && takeInput)
+        m_renderImGui = !m_renderImGui;
 
-    float averageDT = m_timer.getAverageDT();
-    ImGui::Text("runtime: %.3f s", m_timer.getTotal());
-    ImGui::Text("average delta: %.4f ms", averageDT * 1000.0f);
-    ImGui::Text("average FPS: %.3f", 1.0f / averageDT);
+    glm::vec3 camPos = m_camera.getPosition();
+    if(takeInput)
+        camPos += moveDir * m_timer.getDT() * 10.0f;
 
-    ImGui::End();
-
-    static PbdUBO& pbd = m_pbdUBO[currentFrame].get();
-
-    ImGui::Begin("Physics Settings");
-
-    ImGui::SliderInt("Fixed time step (fps)", &m_fixedTimeStep, 10, 240);
-    ImGui::SliderInt("Substep count", &m_subSteps, 1, 25);
-    ImGui::SliderFloat("Edge compliance", &pbd.edgeCompliance, 0.0f, 1.0f);
-    ImGui::SliderFloat("Volume compliance", &pbd.volumeCompliance, 0.0f, 1.0f);
-    ImGui::Checkbox("Render wireframe", &m_renderTetMesh);
-
-    float timeStep = 1.0f / (float)m_fixedTimeStep;
-    m_timer.setFixedDT(timeStep);
-    pbd.deltaTime = timeStep / m_subSteps;
-
-    m_pbdUBO[currentFrame].get() = pbd;
-    m_pbdUBO[currentFrame].update();
-
-    ImGui::End();
-
-    ImGui::Begin("Copy image");
-
-    if (ImGui::Button("Copy!"))
+    if (ImGui::IsKeyPressed(ImGuiKey_P) && takeInput)
     {
         Texture texture = m_swapChain.copyImage(currentFrame, m_commandPool);
         std::ifstream stream;
@@ -401,104 +570,19 @@ void Renderer::renderImGui()
             else
             {
                 m_resources.exportJPG(texture, "../screenshots/" + std::to_string(i) + ".jpg");
+                stream.close();
                 break;
             }
         }
         texture.cleanup();
     }
 
-    ImGui::End();
-
-    static GraphicsUBO& ubo = m_graphicsUBO[currentFrame].get();
-    static glm::vec3 offset = glm::vec3(0.0f, 5.0f, 0.0f);
-
-    ImGui::Begin("Scene settings");
-
-    ImGui::SliderFloat4("Global ambient", (float*)&ubo.globalAmbient, 0.0f, 1.0f);
-    ImGui::SliderFloat3("Light position", (float*)&ubo.lightPos, -10.0f, 10.0f);
-    ImGui::SliderFloat("Light intensity", &ubo.lightIntensity, -1.0f, 10.0f);
-    ImGui::SliderFloat("Light cone", &ubo.lightCone, 0.0f, 1.0f);
-    ImGui::SliderFloat("Specular power", &ubo.specPower, 0.0f, 100.0f);
-
-    ImGui::Text("");
-    ImGui::Text("Camera settings");
-    glm::vec3 camPos = m_camera.getPosition(), camRot = m_camera.getRotation();
-    ImGui::SliderFloat3("Position", (float*)&camPos, -10.0f, 10.0f, "%.4f");
-    ImGui::SliderFloat3("Rotation", (float*)&camRot, -180.0f, 180.0f, "%.4f");
-
-    ImGui::Text("");
-    ImGui::Text("Soft body model");
-    ImGui::InputText("Name", m_modelName, 25);
-    ImGui::SliderInt("Resolution", &m_modelResolution, 1, 100);
-    ImGui::SliderFloat3("Start offset", (float*)&offset, 0.0f, 10.0f);
-    ImGui::SliderInt("Number of bodies", &m_modelCount, 1, MAX_SOFT_BODY_COUNT);
-    ImGui::SliderInt("Frame measure count", &m_frameCount, 100, MAX_FRAME_MEASUREMENT_COUNT);
-
-    if (ImGui::Button("Load"))
-    {
-        for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
-        {
-            if (!m_softBodies[i].active)
-                break;
-            m_removeBodies[0].push_back(m_softBodies[i]);
-            m_softBodies[i].active = false;
-        }
-        for (int i = 0; i < m_modelCount; i++)
-            m_softBodies[i] = createSoftBody(m_modelName, offset, m_modelResolution);
-
-        m_timer.reset();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Measure FPS") && m_measureFrameCounter == MAX_FRAME_MEASUREMENT_COUNT)
-    {
-        m_avgFPS = std::vector<float>(m_frameCount, 0.0f);
-        m_measureFPS = true;
-        m_measureFrameCounter = 0;
-
-        for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
-        {
-            if (!m_softBodies[i].active)
-                break;
-            m_removeBodies[0].push_back(m_softBodies[i]);
-            m_softBodies[i].active = false;
-        }
-        for (int i = 0; i < m_modelCount; i++)
-            m_softBodies[i] = createSoftBody(m_modelName, offset, m_modelResolution);
-
-        m_timer.reset();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Measure Error") && m_measureFrameCounter == MAX_FRAME_MEASUREMENT_COUNT)
-    {
-        m_avgError = std::vector<float>(m_frameCount, 0.0f);
-        m_avgCenterError = std::vector<float>(m_frameCount, 0.0f);
-        m_avgCenterPos[0] = std::vector<glm::vec3>(m_frameCount, glm::vec3(0.0f));
-        m_avgCenterPos[1] = std::vector<glm::vec3>(m_frameCount, glm::vec3(0.0f));
-        m_measureFPS = false;
-        m_measureFrameCounter = 0;
-
-        for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
-        {
-            if (!m_softBodies[i].active)
-                break;
-            m_removeBodies[0].push_back(m_softBodies[i]);
-            m_softBodies[i].active = false;
-        }
-        m_softBodies[0] = createSoftBody(m_modelName, offset, 100);
-        m_softBodies[1] = createSoftBody(m_modelName, offset, m_modelResolution);
-    }
-
     m_camera.setPosition(camPos);
-    m_camera.setRotation(camRot);
     ubo.camPos = camPos;
     ubo.viewProj = m_camera.getMatrix();
 
     m_graphicsUBO[currentFrame].get() = ubo;
     m_graphicsUBO[currentFrame].update();
-
-    ImGui::End();
-
-    //------------------------------------------
 
     ImGui::Render();
 }
@@ -574,7 +658,7 @@ void Renderer::init(Window& window)
         m_swapChain.getRenderPass(),
         "assets/spv/tetrahedral.vert.spv",
         "assets/spv/simple.frag.spv",
-        { VK_POLYGON_MODE_LINE, true, false},
+        { VK_POLYGON_MODE_LINE, false, false},
         VERTEX_STREAM_INPUT_NONE
     );
 
@@ -584,10 +668,11 @@ void Renderer::init(Window& window)
             { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
         },
         {
-            { 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
             { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
             { 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
-            { 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
+            { 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
         }
     });
     m_pbdDescriptorSet.init(m_device, m_pbdDescriptorSetLayout, 0, MAX_FRAMES_IN_FLIGHT);
@@ -600,12 +685,13 @@ void Renderer::init(Window& window)
     m_deformDescriptorSetLayout.init(m_device,
     {
         {
-            { 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
             { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
             { 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
             { 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
             { 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
-            { 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
+            { 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
         }
     });
     m_deformPipelineLayout.init(m_device, &m_deformDescriptorSetLayout);
@@ -620,7 +706,7 @@ void Renderer::init(Window& window)
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         m_graphicsUBO[i].init(m_device, graphics);
-        m_pbdUBO[i].init(m_device, { dt, 0.01f, 0.01f });
+        m_pbdUBO[i].init(m_device, { dt, 0.01f, 0.0f });
     }
 
     m_commandPool.init(m_device, VK_PIPELINE_BIND_POINT_GRAPHICS);
@@ -655,7 +741,9 @@ void Renderer::cleanup()
 
     m_imGuiRenderer.cleanup();
 
-    for (auto& softBody : m_softBodies)
+    for (auto& softBody : m_softBodies0)
+        softBody.cleanup();
+    for (auto& softBody : m_softBodies1)
         softBody.cleanup();
 
     m_floorTexture.cleanup();
@@ -736,7 +824,7 @@ void Renderer::render()
     m_computeCommandBufferArray.begin(currentFrame);
     if (m_timer.passedFixedDT())
     {
-        for (auto& softBody : m_softBodies)
+        for (auto& softBody : *p_currentSoftBodies)
         {
             if (softBody.active)
             {
@@ -748,15 +836,15 @@ void Renderer::render()
         }
 
         // Shift vectors to next 'frame'
-        for (int i = MAX_FRAMES_IN_FLIGHT; i > 0; i--)
-        {
-            m_removeBodies[i] = m_removeBodies[i - 1];
-        }
-        m_removeBodies[0].clear();
+        //for (int i = MAX_FRAMES_IN_FLIGHT; i > 0; i--)
+        //{
+        //    m_removeBodies[i] = m_removeBodies[i - 1];
+        //}
+        //m_removeBodies[0].clear();
 
-        // Remove soft bodies outside of max frames in flight scope
-        for (auto& remove : m_removeBodies.back())
-            remove.cleanup();
+        //// Remove soft bodies outside of max frames in flight scope
+        //for (auto& remove : m_removeBodies.back())
+        //    remove.cleanup();
 
         // Measurements
         if (m_measureFrameCounter < MAX_FRAME_MEASUREMENT_COUNT)
@@ -786,11 +874,11 @@ void Renderer::render()
             else
             {
                 std::array<std::vector<avec3>, 2> pos;
-                uint32_t vertexCount = m_softBodies[0].mesh.getVertexCount();
+                uint32_t vertexCount = (*p_currentSoftBodies)[0].mesh.getVertexCount();
                 for (int i = 0; i < 2; i++)
                 {
                     pos[i].resize(vertexCount);
-                    Buffer& buffer = m_softBodies[i].mesh.getVertexBuffer(0);
+                    Buffer& buffer = (*p_currentSoftBodies)[i].mesh.getVertexBuffer(0);
 
                     buffer.map();
                     memcpy(pos[i].data(), buffer.getMapped(), buffer.getSize());
@@ -835,19 +923,18 @@ void Renderer::render()
                     out.close();
 
                     std::string errPath(
-                        "../measurements/error/" +
                         std::string(m_modelName) + "_" +
                         std::to_string(m_modelResolution) + "_" +
-                        std::to_string(m_frameCount)
+                        std::to_string(m_frameCount) + ".txt"
                     );
 
                     // Error and center error
-                    out.open(errPath + ".txt");
+                    out.open("../measurements/error/" + errPath);
                     for (auto& err : m_avgError)
                         out << err << "\n";
                     out.close();
 
-                    out.open(errPath + "_center.txt");
+                    out.open("../measurements/error_center/" + errPath);
                     for (auto& err : m_avgCenterError)
                         out << err << "\n";
                     out.close();

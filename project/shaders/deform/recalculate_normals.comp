@@ -1,24 +1,33 @@
 #version 450
 #extension GL_EXT_shader_atomic_float : enable
 
-layout(std140, set = 0, binding = 0) buffer VertexPositionsSSBO
+layout(set = 0, binding = 0) uniform InfoUBO
+{
+    uint vertexCount;
+    uint indexCount;
+} info;
+
+layout(std140, set = 0, binding = 1) buffer VertexPositionsSSBO
 {
 	vec3 vertexPositions[];
 };
-layout(std140, set = 0, binding = 1) buffer VertexNormalsSSBO
+layout(std140, set = 0, binding = 2) buffer VertexNormalsSSBO
 {
 	vec3 vertexNormals[];
 };
-layout(std430, set = 0, binding = 2) buffer IndicesSSBO
+layout(std430, set = 0, binding = 3) buffer IndicesSSBO
 {
 	uint indices[];
 };
 
-layout(local_size_x = 1) in;
+layout(local_size_x = 32) in;
 
 void main()
 {
 	uint index = 3 * gl_GlobalInvocationID.x;
+	if(index >= info.indexCount)
+		return;
+
 	uvec3 test = uvec3(indices[index], indices[index + 1], indices[index + 2]);
 	vec3 p0 = vertexPositions[indices[index + 0]];
 	vec3 p1 = vertexPositions[indices[index + 1]];

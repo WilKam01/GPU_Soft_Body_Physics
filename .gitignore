@@ -356,9 +356,8 @@ MigrationBackup/
 .ionide/
 
 # Additional ignores
-*.spv
 **/imgui.ini
-!**/models/*.obj
-!**/tet_models/*.obj
+!project/assets/**
+*.spv
 screenshots/**
 measurements/**
