@@ -25,29 +25,34 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
 
     m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_meshDescriptorSet.get(0)});
-    for (auto& softBody : *p_currentSoftBodies)
+    int counter = 0;
+    for (auto& softBody : m_softBodies)
     {
-        if (softBody.active)
-        {
-            softBody.mesh.bind(commandBuffer);
-            vkCmdDrawIndexed(commandBuffer, softBody.mesh.getIndexCount(), 1, 0, 0, 0);
-        }
+        if (!softBody.active)
+            break;
+        
+        counter++;
+        softBody.mesh.bind(commandBuffer);
+        m_graphicsPipelineLayout.pushConstants(commandBuffer, sizeof(glm::vec3), &softBody.color);
+        vkCmdDrawIndexed(commandBuffer, softBody.mesh.getIndexCount(), 1, 0, 0, 0);
     }
 
+    glm::vec3 white = glm::vec3(1.0f);
     m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_floorDescriptorSet.get(0) });
+    m_graphicsPipelineLayout.pushConstants(commandBuffer, sizeof(glm::vec3), &white);
     m_floorMesh.bind(commandBuffer);
     vkCmdDrawIndexed(commandBuffer, m_floorMesh.getIndexCount(), 1, 0, 0, 0);
 
     if (m_renderTetMesh)
     {
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_tetPipeline.get());
-        for (auto& softBody : *p_currentSoftBodies)
+        for (auto& softBody : m_softBodies)
         {
-            if (softBody.active)
-            {
-                m_tetPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), softBody.graphicsDescriptorSet.get(0) });
-                vkCmdDraw(commandBuffer, 12, softBody.tetMesh.getTetCount(), 0, 0);
-            }
+            if (!softBody.active)
+                break;
+
+            m_tetPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), softBody.graphicsDescriptorSet.get(0) });
+            vkCmdDraw(commandBuffer, 12, softBody.tetMesh.getTetCount(), 0, 0);
         }
     }
 
@@ -207,8 +212,7 @@ void Renderer::createSyncObjects()
 
 void Renderer::createResources()
 {
-    m_softBodies0[0] = createSoftBody(m_modelName, glm::vec3(0.0f, 5.0f, 0.0f));
-    p_currentSoftBodies = &m_softBodies0;
+    m_softBodies[0] = createSoftBody(m_modelName, m_offset);
 
     m_texture = m_resources.loadTexture("assets/textures/texture.jpg");
     m_sampler.init(m_device);
@@ -256,7 +260,7 @@ SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset, int
     if (!softBodyData)
         return softBody;
 
-    softBody.mesh.init(m_device, m_commandPool, &softBodyData->mesh);
+    softBody.mesh.init(m_device, m_commandPool, softBodyData->mesh);
     softBody.tetMesh.init(m_device, m_commandPool, &softBodyData->tetMesh, offset);
 
     softBody.pbdUBO.init(m_device, glm::uvec3(softBody.tetMesh.getParticleCount(), softBody.tetMesh.getEdgeCount(), softBody.tetMesh.getTetCount()));
@@ -291,7 +295,7 @@ SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset, int
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             bufferSize,
-            (void*)softBodyData->mesh.origIndices.data()
+            (void*)softBodyData->mesh->origIndices.data()
         );
         softBody.useTetDeformation = false;
     }
@@ -318,6 +322,8 @@ SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset, int
     stagingBuffer.cleanup();
 
     softBody.deformDescriptorSet.writeBuffer(0, 5, softBody.deformBuffer);
+
+    softBody.color = COLORS[rand() % COLOR_COUNT];
     softBody.active = true;
 
     return softBody;
@@ -399,9 +405,6 @@ void Renderer::renderImGui()
 
         ImGui::End();
 
-        static glm::vec3 offset = glm::vec3(0.0f, 5.0f, 0.0f);
-        static glm::vec3 randOffset = glm::vec3(3.0f);
-
         ImGui::Begin("Scene settings");
 
         ImGui::SliderFloat4("Global ambient", (float*)&ubo.globalAmbient, 0.0f, 1.0f);
@@ -415,53 +418,21 @@ void Renderer::renderImGui()
         ImGui::InputText("Name", m_modelName, 25);
         takeInput = !ImGui::IsItemActive();
         ImGui::SliderInt("Resolution", &m_modelResolution, 1, 100);
-        ImGui::SliderFloat3("Start offset", (float*)&offset, 0.0f, 10.0f);
-        ImGui::SliderFloat3("Rand offset", (float*)&randOffset, 0.0f, 6.0f);
+        ImGui::SliderFloat3("Start offset", (float*)&m_offset, 0.0f, 10.0f);
+        ImGui::SliderFloat3("Rand offset", (float*)&m_randOffset, 0.0f, 6.0f);
         ImGui::SliderInt("Number of bodies", &m_modelCount, 1, MAX_SOFT_BODY_COUNT);
         ImGui::SliderInt("Frame measure count", &m_frameCount, 100, MAX_FRAME_MEASUREMENT_COUNT);
 
         if (ImGui::Button("Load"))
         {
-            if (p_currentSoftBodies == &m_softBodies0)
+            for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
             {
-                p_currentSoftBodies = &m_softBodies1;
-                for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
-                {
-                    if (!m_softBodies1[i].active)
-                        break;
-                    m_softBodies1[i].cleanup();
-                }
-            }
-            else
-            {
-                p_currentSoftBodies = &m_softBodies0;
-                for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
-                {
-                    if (!m_softBodies0[i].active)
-                        break;
-                    m_softBodies0[i].cleanup();
-                }
+                if (!m_softBodies[i].active)
+                    break;
+                m_removeBodies.push_back(&m_softBodies[i]);
             }
 
-            if (m_modelCount == 1)
-            {
-                (*p_currentSoftBodies)[0] = createSoftBody(m_modelName, offset, m_modelResolution);
-            }
-            else
-            {
-                for (int i = 0; i < m_modelCount; i++)
-                {
-                    glm::vec3 startOffset = offset +
-                        glm::vec3(
-                            (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1),
-                            (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1),
-                            (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1)
-                        ) * randOffset;
-                    (*p_currentSoftBodies)[i] = createSoftBody(m_modelName, startOffset, m_modelResolution);
-                }
-            }
-
-            m_timer.reset();
+            m_loadSoftBodies = 1;
         }
         ImGui::SameLine();
         if (ImGui::Button("Measure FPS") && m_measureFrameCounter == MAX_FRAME_MEASUREMENT_COUNT)
@@ -470,46 +441,14 @@ void Renderer::renderImGui()
             m_measureFPS = true;
             m_measureFrameCounter = 0;
 
-            if (p_currentSoftBodies == &m_softBodies0)
+            for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
             {
-                p_currentSoftBodies = &m_softBodies1;
-                for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
-                {
-                    if (!m_softBodies1[i].active)
-                        break;
-                    m_softBodies1[i].cleanup();
-                }
-            }
-            else
-            {
-                p_currentSoftBodies = &m_softBodies0;
-                for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
-                {
-                    if (!m_softBodies0[i].active)
-                        break;
-                    m_softBodies0[i].cleanup();
-                }
+                if (!m_softBodies[i].active)
+                    break;
+                m_removeBodies.push_back(&m_softBodies[i]);
             }
 
-            if (m_modelCount == 1)
-            {
-                (*p_currentSoftBodies)[0] = createSoftBody(m_modelName, offset, m_modelResolution);
-            }
-            else
-            {
-                for (int i = 0; i < m_modelCount; i++)
-                {
-                    glm::vec3 startOffset = offset +
-                        glm::vec3(
-                            (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1),
-                            (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1),
-                            (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1)
-                        ) * randOffset;
-                    (*p_currentSoftBodies)[i] = createSoftBody(m_modelName, startOffset, m_modelResolution);
-                }
-            }
-
-            m_timer.reset();
+            m_loadSoftBodies = 1;
         }
         ImGui::SameLine();
         if (ImGui::Button("Measure Error") && m_measureFrameCounter == MAX_FRAME_MEASUREMENT_COUNT)
@@ -521,30 +460,14 @@ void Renderer::renderImGui()
             m_measureFPS = false;
             m_measureFrameCounter = 0;
 
-            if (p_currentSoftBodies == &m_softBodies0)
+            for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
             {
-                p_currentSoftBodies = &m_softBodies1;
-                for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
-                {
-                    if (!m_softBodies1[i].active)
-                        break;
-                    m_softBodies1[i].cleanup();
-                }
+                if (!m_softBodies[i].active)
+                    break;
+                m_removeBodies.push_back(&m_softBodies[i]);
             }
-            else
-            {
-                p_currentSoftBodies = &m_softBodies0;
-                for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
-                {
-                    if (!m_softBodies0[i].active)
-                        break;
-                    m_softBodies0[i].cleanup();
-                }
-            }
-            (*p_currentSoftBodies)[0] = createSoftBody(m_modelName, offset, 100);
-            (*p_currentSoftBodies)[1] = createSoftBody(m_modelName, offset, m_modelResolution);
 
-            m_timer.reset();
+            m_loadSoftBodies = 2;
         }
         ImGui::End();
     }
@@ -599,12 +522,12 @@ void Renderer::init(Window& window)
     currentFrame = 0;
     GraphicsUBO graphics{};
     graphics.viewProj = m_camera.getMatrix();
-    graphics.globalAmbient = glm::vec4(0.01f);
-    graphics.lightPos = glm::vec3(0.0f, 10.0f, 5.0f);
+    graphics.globalAmbient = glm::vec4(0.05f);
+    graphics.lightPos = glm::vec3(0.0f, 8.0f, 5.0f);
     graphics.lightDir = glm::normalize(-graphics.lightPos);
     graphics.lightCone = 0.75f;
-    graphics.lightIntensity = 3.0f;
-    graphics.specPower = 70.0f;
+    graphics.lightIntensity = 8.0f;
+    graphics.specPower = 100.0f;
     graphics.camPos = m_camera.getPosition();
 
     m_viewport.x = 0.0f;
@@ -630,7 +553,7 @@ void Renderer::init(Window& window)
     m_meshDescriptorSet.init(m_device, m_graphicsDescriptorSetLayout, 1);
     m_floorDescriptorSet.init(m_device, m_graphicsDescriptorSetLayout, 1);
 
-    m_graphicsPipelineLayout.init(m_device, &m_graphicsDescriptorSetLayout);
+    m_graphicsPipelineLayout.init(m_device, &m_graphicsDescriptorSetLayout, sizeof(glm::vec3));
     m_graphicsPipeline.initGraphics(
         m_device, 
         m_graphicsPipelineLayout, 
@@ -741,9 +664,7 @@ void Renderer::cleanup()
 
     m_imGuiRenderer.cleanup();
 
-    for (auto& softBody : m_softBodies0)
-        softBody.cleanup();
-    for (auto& softBody : m_softBodies1)
+    for (auto& softBody : m_softBodies)
         softBody.cleanup();
 
     m_floorTexture.cleanup();
@@ -811,7 +732,49 @@ void Renderer::cleanup()
 
 void Renderer::render()
 {
-    m_timer.update();
+    if (!m_removeBodies.empty())
+    {
+        vkQueueWaitIdle(m_device.getComputeQueue());
+        vkQueueWaitIdle(m_device.getGraphicsQueue());
+
+        for (auto& softBody : m_removeBodies)
+            softBody->cleanup();
+        m_removeBodies.clear();
+        m_timer.reset();
+    }
+    if (m_loadSoftBodies == 1) // Normal load
+    {
+        if (m_modelCount == 1)
+        {
+            m_softBodies[0] = createSoftBody(m_modelName, m_offset, m_modelResolution);
+        }
+        else
+        {
+            for (int i = 0; i < m_modelCount; i++)
+            {
+                glm::vec3 startOffset = m_offset +
+                    glm::vec3(
+                        (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1),
+                        (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1),
+                        (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1)
+                    ) * m_randOffset;
+                m_softBodies[i] = createSoftBody(m_modelName, startOffset, m_modelResolution);
+            }
+        }
+
+        m_loadSoftBodies = 0;
+        m_timer.reset();
+    }
+    else if (m_loadSoftBodies == 2) // Error measuring
+    {
+        m_softBodies[0] = createSoftBody(m_modelName, m_offset, 100);
+        m_softBodies[1] = createSoftBody(m_modelName, m_offset, m_modelResolution);
+
+        m_loadSoftBodies = 0;
+        m_timer.reset();
+    }
+    else
+        m_timer.update();
 
     VkDevice device = m_device.getLogical();
     VkSubmitInfo submitInfo{};
@@ -824,27 +787,16 @@ void Renderer::render()
     m_computeCommandBufferArray.begin(currentFrame);
     if (m_timer.passedFixedDT())
     {
-        for (auto& softBody : *p_currentSoftBodies)
+        for (auto& softBody : m_softBodies)
         {
-            if (softBody.active)
-            {
-                for (int i = 0; i < m_subSteps; i++)
-                    computePhysics(m_computeCommandBufferArray[currentFrame], softBody);
+            if (!softBody.active)
+                break;
 
-                deformMesh(m_computeCommandBufferArray[currentFrame], softBody);
-            }
+            for (int i = 0; i < m_subSteps; i++)
+                computePhysics(m_computeCommandBufferArray[currentFrame], softBody);
+
+            deformMesh(m_computeCommandBufferArray[currentFrame], softBody);
         }
-
-        // Shift vectors to next 'frame'
-        //for (int i = MAX_FRAMES_IN_FLIGHT; i > 0; i--)
-        //{
-        //    m_removeBodies[i] = m_removeBodies[i - 1];
-        //}
-        //m_removeBodies[0].clear();
-
-        //// Remove soft bodies outside of max frames in flight scope
-        //for (auto& remove : m_removeBodies.back())
-        //    remove.cleanup();
 
         // Measurements
         if (m_measureFrameCounter < MAX_FRAME_MEASUREMENT_COUNT)
@@ -874,11 +826,11 @@ void Renderer::render()
             else
             {
                 std::array<std::vector<avec3>, 2> pos;
-                uint32_t vertexCount = (*p_currentSoftBodies)[0].mesh.getVertexCount();
+                uint32_t vertexCount = m_softBodies[0].mesh.getVertexCount();
                 for (int i = 0; i < 2; i++)
                 {
                     pos[i].resize(vertexCount);
-                    Buffer& buffer = (*p_currentSoftBodies)[i].mesh.getVertexBuffer(0);
+                    Buffer& buffer = m_softBodies[i].mesh.getVertexBuffer(0);
 
                     buffer.map();
                     memcpy(pos[i].data(), buffer.getMapped(), buffer.getSize());
@@ -1005,7 +957,7 @@ void Renderer::render()
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = swapChains;
     presentInfo.pImageIndices = &imageIndex;
-    presentInfo.pResults = nullptr; // Optional
+    presentInfo.pResults = nullptr;
 
     result = vkQueuePresentKHR(m_device.getPresentQueue(), &presentInfo);
 

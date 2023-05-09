@@ -1,10 +1,15 @@
 #include "pch.h"
 #include "Pipeline.h"
 
-void PipelineLayout::init(Device& device, DescriptorSetLayout* layout)
+void PipelineLayout::init(Device& device, DescriptorSetLayout* layout, uint32_t pushConstantSize)
 {
     p_device = &device;
     p_descriptorSetLayout = layout;
+
+    VkPushConstantRange pushConstantRange{};
+    pushConstantRange.size = pushConstantSize;
+    pushConstantRange.offset = 0;
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -12,8 +17,11 @@ void PipelineLayout::init(Device& device, DescriptorSetLayout* layout)
     {
         pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(p_descriptorSetLayout->getAll().size());
         pipelineLayoutInfo.pSetLayouts = p_descriptorSetLayout->getAll().data();
-        pipelineLayoutInfo.pushConstantRangeCount = 0;
-        pipelineLayoutInfo.pPushConstantRanges = nullptr;
+    }
+    if (pushConstantSize != 0)
+    {
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
     }
 
     if (vkCreatePipelineLayout(p_device->getLogical(), &pipelineLayoutInfo, nullptr, &m_layout) != VK_SUCCESS)
@@ -36,6 +44,18 @@ void PipelineLayout::bindDescriptors(VkCommandBuffer commandBuffer, VkPipelineBi
         descriptorSets.data(),
         0, 
         0
+    );
+}
+
+void PipelineLayout::pushConstants(VkCommandBuffer commandBuffer, uint32_t size, const void* data)
+{
+    vkCmdPushConstants(
+        commandBuffer,
+        m_layout,
+        VK_SHADER_STAGE_FRAGMENT_BIT,
+        0,
+        size,
+        data
     );
 }
 

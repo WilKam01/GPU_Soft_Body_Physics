@@ -41,6 +41,7 @@ struct SoftBody
 	DescriptorSet graphicsDescriptorSet;
 	DescriptorSet pbdDescriptorSet;
 	DescriptorSet deformDescriptorSet;
+	glm::vec3 color;
 	bool useTetDeformation = false;
 
 	// Buffer used to deform the original mesh, either directly in the form of indices or in the form of tetrahedral deformation
@@ -74,6 +75,18 @@ public:
 	const static int MAX_FRAMES_IN_FLIGHT = 2;
 	const static int MAX_SOFT_BODY_COUNT = 50;
 	const static int MAX_FRAME_MEASUREMENT_COUNT = 1000;
+
+	const static int COLOR_COUNT = 7;
+	inline const static glm::vec3 COLORS[COLOR_COUNT] = 
+	{
+		glm::vec3(1.0f, 0.15f, 0.05f),
+		glm::vec3(0.5f, 0.15f, 0.55f),
+		glm::vec3(0.9f, 0.85f, 0.1f),
+		glm::vec3(0.05f, 0.3f, 0.615f),
+		glm::vec3(0.0f, 0.225f, 0.325f),
+		glm::vec3(0.25f, 0.5f, 0.1f),
+		glm::vec3(0.65f, 0.3f, 0.0f),
+	};
 private:
 	uint32_t currentFrame;
 	Timer m_timer;
@@ -119,10 +132,9 @@ private:
 	Texture m_texture;
 	Sampler m_sampler;
 
-	std::array<SoftBody, MAX_SOFT_BODY_COUNT>* p_currentSoftBodies;
-	std::array<SoftBody, MAX_SOFT_BODY_COUNT> m_softBodies0;
-	std::array<SoftBody, MAX_SOFT_BODY_COUNT> m_softBodies1;
-	std::array<std::vector<SoftBody>, MAX_FRAMES_IN_FLIGHT + 1> m_removeBodies; // Removed after their execution is done
+	uint32_t m_loadSoftBodies = 0; // Used to load soft bodies after button has been pressed, happens after old bodies have been destroyed
+	std::array<SoftBody, MAX_SOFT_BODY_COUNT> m_softBodies;
+	std::vector<SoftBody*> m_removeBodies; // Removed after their execution is done
 
 	// Measurement related
 	uint32_t m_measureFrameCounter = MAX_FRAME_MEASUREMENT_COUNT;
@@ -131,7 +143,9 @@ private:
 	char m_modelName[25] = "sphere";
 	int m_modelResolution = 100;
 	int m_modelCount = 1;
-	int m_frameCount = 100;
+	int m_frameCount = 500;
+	glm::vec3 m_offset = glm::vec3(0.0f, 5.0f, 0.0f);
+	glm::vec3 m_randOffset = glm::vec3(3.0f);
 
 	std::vector<float> m_avgFPS;
 	std::vector<float> m_avgError;

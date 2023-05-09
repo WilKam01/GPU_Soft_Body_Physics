@@ -17,10 +17,11 @@ private:
 	DescriptorSetLayout* p_descriptorSetLayout;
 	VkPipelineLayout m_layout;
 public:
-	void init(Device& device, DescriptorSetLayout* layout = nullptr);
+	void init(Device& device, DescriptorSetLayout* layout = nullptr, uint32_t pushConstantSize = 0);
 	void cleanup();
 
 	void bindDescriptors(VkCommandBuffer commandBuffer, VkPipelineBindPoint bindPoint, const std::vector<VkDescriptorSet>& descriptorSets);
+	void pushConstants(VkCommandBuffer commandBuffer, uint32_t size, const void* data);
 
 	inline VkPipelineLayout get() { return m_layout; }
 };

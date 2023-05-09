@@ -12,7 +12,7 @@ struct DeformationInfo
 
 struct SoftBodyData
 {
-	MeshData mesh;
+	MeshData* mesh;
 	TetrahedralMeshData tetMesh;
 	std::vector<DeformationInfo> deformationInfo;
 };
@@ -22,7 +22,8 @@ class ResourceManager
 private:
 	Device* s_device;
 	CommandPool* s_commandPool;
-	std::unordered_map<std::string, SoftBodyData> softBodyModels;
+	std::unordered_map<std::string, MeshData> m_meshModels;
+	std::unordered_map<std::string, SoftBodyData> m_softBodyModels;
 public:
 	void init(Device& device, CommandPool& commandPool);
 
