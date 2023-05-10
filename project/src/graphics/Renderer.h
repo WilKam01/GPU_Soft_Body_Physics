@@ -138,12 +138,13 @@ private:
 
 	// Measurement related
 	uint32_t m_measureFrameCounter = MAX_FRAME_MEASUREMENT_COUNT;
+	uint32_t m_warmupCounter = 0; // Used to wait a couple of steps when measuring the error
 	bool m_measureFPS; // true : measure fps of model, false: measure error
 
 	char m_modelName[25] = "sphere";
 	int m_modelResolution = 100;
 	int m_modelCount = 1;
-	int m_frameCount = 500;
+	int m_frameCount = 250;
 	glm::vec3 m_offset = glm::vec3(0.0f, 5.0f, 0.0f);
 	glm::vec3 m_randOffset = glm::vec3(3.0f);
 

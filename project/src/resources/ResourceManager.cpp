@@ -253,6 +253,10 @@ SoftBodyData* ResourceManager::getSoftBody(std::string name, int resolution)
                 diff = data.mesh->vertices.positions[i].vec - data.tetMesh.particles[data.tetMesh.tets[j].indices[3]].position;
                 diff = tetMatrices[j] * diff;
 
+                // Invalid bary coordinates
+                if (isnan(diff.x) || isnan(diff.x) || isnan(diff.x))
+                    continue;
+
                 float baryCoords[4]{ diff.x, diff.y, diff.z, 1.0f - (diff.x + diff.y + diff.z) };
                 float maxDist = 0.0f;
                 for (int k = 0; k < 4; k++)

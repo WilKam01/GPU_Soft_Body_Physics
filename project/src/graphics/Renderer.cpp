@@ -459,6 +459,7 @@ void Renderer::renderImGui()
             m_avgCenterPos[1] = std::vector<glm::vec3>(m_frameCount, glm::vec3(0.0f));
             m_measureFPS = false;
             m_measureFrameCounter = 0;
+            m_warmupCounter = 0;
 
             for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
             {
@@ -825,75 +826,79 @@ void Renderer::render()
             }
             else
             {
-                std::array<std::vector<avec3>, 2> pos;
-                uint32_t vertexCount = m_softBodies[0].mesh.getVertexCount();
-                for (int i = 0; i < 2; i++)
+                if (m_warmupCounter > 5)
                 {
-                    pos[i].resize(vertexCount);
-                    Buffer& buffer = m_softBodies[i].mesh.getVertexBuffer(0);
+                    std::array<std::vector<avec3>, 2> pos;
+                    uint32_t vertexCount = m_softBodies[0].mesh.getVertexCount();
+                    for (int i = 0; i < 2; i++)
+                    {
+                        pos[i].resize(vertexCount);
+                        Buffer& buffer = m_softBodies[i].mesh.getVertexBuffer(0);
 
-                    buffer.map();
-                    memcpy(pos[i].data(), buffer.getMapped(), buffer.getSize());
-                    buffer.unmap();
+                        buffer.map();
+                        memcpy(pos[i].data(), buffer.getMapped(), buffer.getSize());
+                        buffer.unmap();
+                    }
+                    for (uint32_t i = 0; i < vertexCount; i++)
+                    {
+                        m_avgError[m_measureFrameCounter] += glm::length(pos[1][i].vec - pos[0][i].vec);
+                        m_avgCenterPos[0][m_measureFrameCounter] += pos[0][i].vec;
+                        m_avgCenterPos[1][m_measureFrameCounter] += pos[1][i].vec;
+                    }
+                    m_avgError[m_measureFrameCounter] /= vertexCount;
+                    m_avgCenterPos[0][m_measureFrameCounter] /= vertexCount;
+                    m_avgCenterPos[1][m_measureFrameCounter] /= vertexCount;
+                    m_avgCenterError[m_measureFrameCounter] = glm::length(m_avgCenterPos[1][m_measureFrameCounter] - m_avgCenterPos[0][m_measureFrameCounter]);
+                    m_measureFrameCounter++;
+
+                    if (m_measureFrameCounter == (uint32_t)m_avgError.size())
+                    {
+                        std::string path0(
+                            "../measurements/position/" +
+                            std::string(m_modelName) + "_100_" +
+                            std::to_string(m_frameCount) + ".txt"
+                        );
+                        std::string path1(
+                            "../measurements/position/" +
+                            std::string(m_modelName) + "_" +
+                            std::to_string(m_modelResolution) + "_" +
+                            std::to_string(m_frameCount) + ".txt"
+                        );
+
+                        // Center positions
+                        std::ofstream out(path0);
+                        for (auto& pos : m_avgCenterPos[0])
+                            out << pos.x << " " << pos.y << " " << pos.z << "\n";
+                        out.close();
+
+                        out.open(path1);
+                        for (auto& pos : m_avgCenterPos[1])
+                            out << pos.x << " " << pos.y << " " << pos.z << "\n";
+                        out.close();
+
+                        std::string errPath(
+                            std::string(m_modelName) + "_" +
+                            std::to_string(m_modelResolution) + "_" +
+                            std::to_string(m_frameCount) + ".txt"
+                        );
+
+                        // Error and center error
+                        out.open("../measurements/error/" + errPath);
+                        for (auto& err : m_avgError)
+                            out << err << "\n";
+                        out.close();
+
+                        out.open("../measurements/error_center/" + errPath);
+                        for (auto& err : m_avgCenterError)
+                            out << err << "\n";
+                        out.close();
+
+                        LOG_WRITE("Successfully performed error measurements");
+                        m_measureFrameCounter = MAX_FRAME_MEASUREMENT_COUNT;
+                    }
                 }
-
-                for (uint32_t i = 0; i < vertexCount; i++)
-                {
-                    m_avgError[m_measureFrameCounter] += glm::length(pos[1][i].vec - pos[0][i].vec);
-                    m_avgCenterPos[0][m_measureFrameCounter] += pos[0][i].vec;
-                    m_avgCenterPos[1][m_measureFrameCounter] += pos[1][i].vec;
-                }
-                m_avgError[m_measureFrameCounter] /= vertexCount;
-                m_avgCenterPos[0][m_measureFrameCounter] /= vertexCount;
-                m_avgCenterPos[1][m_measureFrameCounter] /= vertexCount;
-                m_avgCenterError[m_measureFrameCounter] = glm::length(m_avgCenterPos[1][m_measureFrameCounter] - m_avgCenterPos[0][m_measureFrameCounter]);
-                m_measureFrameCounter++;
-
-                if (m_measureFrameCounter == (uint32_t)m_avgError.size())
-                {
-                    std::string path0(
-                        "../measurements/position/" +
-                        std::string(m_modelName) + "_100_" + 
-                        std::to_string(m_frameCount) + ".txt"
-                    );
-                    std::string path1(
-                        "../measurements/position/" +
-                        std::string(m_modelName) + "_" +
-                        std::to_string(m_modelResolution) + "_" + 
-                        std::to_string(m_frameCount) + ".txt"
-                    );
-
-                    // Center positions
-                    std::ofstream out(path0);
-                    for (auto& pos : m_avgCenterPos[0])
-                        out << pos.x << " " << pos.y << " " << pos.z << "\n";
-                    out.close();
-
-                    out.open(path1);
-                    for (auto& pos : m_avgCenterPos[1])
-                        out << pos.x << " " << pos.y << " " << pos.z << "\n";
-                    out.close();
-
-                    std::string errPath(
-                        std::string(m_modelName) + "_" +
-                        std::to_string(m_modelResolution) + "_" +
-                        std::to_string(m_frameCount) + ".txt"
-                    );
-
-                    // Error and center error
-                    out.open("../measurements/error/" + errPath);
-                    for (auto& err : m_avgError)
-                        out << err << "\n";
-                    out.close();
-
-                    out.open("../measurements/error_center/" + errPath);
-                    for (auto& err : m_avgCenterError)
-                        out << err << "\n";
-                    out.close();
-
-                    LOG_WRITE("Successfully performed error measurements");
-                    m_measureFrameCounter = MAX_FRAME_MEASUREMENT_COUNT;
-                }
+                else
+                    m_warmupCounter++;
             }
         }
     }
