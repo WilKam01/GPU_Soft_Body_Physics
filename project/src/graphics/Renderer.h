@@ -95,7 +95,7 @@ private:
 
 	int m_fixedTimeStep = 60;
 	int m_subSteps = 20;
-	bool m_renderTetMesh = true;
+	bool m_renderTetMesh = false;
 
 	Instance m_instance;
 	Device m_device;
@@ -146,7 +146,6 @@ private:
 	int m_modelCount = 1;
 	int m_frameCount = 250;
 	glm::vec3 m_offset = glm::vec3(0.0f, 5.0f, 0.0f);
-	glm::vec3 m_randOffset = glm::vec3(3.0f);
 
 	std::vector<float> m_avgFPS;
 	std::vector<float> m_avgError;

@@ -25,6 +25,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
 
     m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_meshDescriptorSet.get(0)});
+    glm::vec3 white = glm::vec3(1.0f);
     int counter = 0;
     for (auto& softBody : m_softBodies)
     {
@@ -37,7 +38,6 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
         vkCmdDrawIndexed(commandBuffer, softBody.mesh.getIndexCount(), 1, 0, 0, 0);
     }
 
-    glm::vec3 white = glm::vec3(1.0f);
     m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_floorDescriptorSet.get(0) });
     m_graphicsPipelineLayout.pushConstants(commandBuffer, sizeof(glm::vec3), &white);
     m_floorMesh.bind(commandBuffer);
@@ -370,6 +370,14 @@ void Renderer::renderImGui()
     if(moveDir != glm::vec3(0.0f))
         moveDir = glm::normalize(moveDir);
 
+    glm::vec3 rotDir(
+        (float)ImGui::IsKeyDown(ImGuiKey_I) - (float)ImGui::IsKeyDown(ImGuiKey_K),
+        (float)ImGui::IsKeyDown(ImGuiKey_J) - (float)ImGui::IsKeyDown(ImGuiKey_L),
+        0.0f
+    );
+    if (rotDir != glm::vec3(0.0f))
+        rotDir = glm::normalize(rotDir);
+
     static GraphicsUBO& ubo = m_graphicsUBO[currentFrame].get();
     static bool takeInput = false;
 
@@ -419,7 +427,6 @@ void Renderer::renderImGui()
         takeInput = !ImGui::IsItemActive();
         ImGui::SliderInt("Resolution", &m_modelResolution, 1, 100);
         ImGui::SliderFloat3("Start offset", (float*)&m_offset, 0.0f, 10.0f);
-        ImGui::SliderFloat3("Rand offset", (float*)&m_randOffset, 0.0f, 6.0f);
         ImGui::SliderInt("Number of bodies", &m_modelCount, 1, MAX_SOFT_BODY_COUNT);
         ImGui::SliderInt("Frame measure count", &m_frameCount, 100, MAX_FRAME_MEASUREMENT_COUNT);
 
@@ -479,8 +486,12 @@ void Renderer::renderImGui()
         m_renderImGui = !m_renderImGui;
 
     glm::vec3 camPos = m_camera.getPosition();
-    if(takeInput)
+    glm::vec3 camRot = m_camera.getRotation();
+    if (takeInput)
+    {
         camPos += moveDir * m_timer.getDT() * 10.0f;
+        camRot += rotDir * m_timer.getDT() * 100.0f;
+    }
 
     if (ImGui::IsKeyPressed(ImGuiKey_P) && takeInput)
     {
@@ -501,7 +512,23 @@ void Renderer::renderImGui()
         texture.cleanup();
     }
 
+    if (ImGui::IsKeyPressed(ImGuiKey_R) && takeInput)
+    {
+        for (int i = 0; i < MAX_SOFT_BODY_COUNT; i++)
+        {
+            if (!m_softBodies[i].active)
+                break;
+            m_removeBodies.push_back(&m_softBodies[i]);
+        }
+
+        m_loadSoftBodies = 1;
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Z) && takeInput)
+        m_renderTetMesh = !m_renderTetMesh;
+
     m_camera.setPosition(camPos);
+    m_camera.setRotation(camRot);
     ubo.camPos = camPos;
     ubo.viewProj = m_camera.getMatrix();
 
@@ -526,7 +553,7 @@ void Renderer::init(Window& window)
     graphics.globalAmbient = glm::vec4(0.05f);
     graphics.lightPos = glm::vec3(0.0f, 8.0f, 5.0f);
     graphics.lightDir = glm::normalize(-graphics.lightPos);
-    graphics.lightCone = 0.75f;
+    graphics.lightCone = 0.8f;
     graphics.lightIntensity = 8.0f;
     graphics.specPower = 100.0f;
     graphics.camPos = m_camera.getPosition();
@@ -582,7 +609,7 @@ void Renderer::init(Window& window)
         m_swapChain.getRenderPass(),
         "assets/spv/tetrahedral.vert.spv",
         "assets/spv/simple.frag.spv",
-        { VK_POLYGON_MODE_LINE, false, false},
+        { VK_POLYGON_MODE_LINE, false, false },
         VERTEX_STREAM_INPUT_NONE
     );
 
@@ -751,14 +778,13 @@ void Renderer::render()
         }
         else
         {
+            float angle = 1.0f;
+            float dist = 2.75f;
             for (int i = 0; i < m_modelCount; i++)
             {
-                glm::vec3 startOffset = m_offset +
-                    glm::vec3(
-                        (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1),
-                        (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1),
-                        (rand() % 1001) * 0.001f * ((rand() & 1) * 2 - 1)
-                    ) * m_randOffset;
+                glm::vec3 dir = glm::vec3(sin(angle * i), 0.0f, cos(angle * i));
+                glm::vec3 startOffset = dir * (float)(dist * log(i + 2));
+                startOffset.y = ((rand() % 1001) * 0.001f) * (m_offset.y - 1) + 1;
                 m_softBodies[i] = createSoftBody(m_modelName, startOffset, m_modelResolution);
             }
         }
