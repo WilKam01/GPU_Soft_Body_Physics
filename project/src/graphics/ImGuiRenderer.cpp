@@ -134,16 +134,6 @@ void ImGuiRenderer::init(Window& window, Instance& instance, Device& device, Swa
         style.Colors[ImGuiCol_WindowBg].w = 1.0f;
     }
 
-    for (uint32_t i = 0; i < ImGuiCol_COUNT; i++)
-    {
-        style.Colors[i] = ImVec4(
-            std::pow(style.Colors[i].x, 2.2f),
-            std::pow(style.Colors[i].y, 2.2f),
-            std::pow(style.Colors[i].z, 2.2f),
-            style.Colors[i].w
-        );
-    }
-
     window.initImGui();
 
     ImGui_ImplVulkan_InitInfo imguiInitInfo{};

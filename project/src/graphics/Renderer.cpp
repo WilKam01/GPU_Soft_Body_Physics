@@ -12,7 +12,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     renderPassInfo.renderArea.extent = m_swapChain.getExtent();
 
     std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = { 0.01f, 0.01f, 0.01f, 1.0f };
+    clearValues[0].color = { 0.1f, 0.1f, 0.1f, 1.0f };
     clearValues[1].depthStencil = { 1.0f, 0 };
 
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
@@ -25,7 +25,6 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
 
     m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_meshDescriptorSet.get(0)});
-    glm::vec3 white = glm::vec3(1.0f);
     int counter = 0;
     for (auto& softBody : m_softBodies)
     {
@@ -33,13 +32,14 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
             break;
         
         counter++;
+        m_material.tint = softBody.color;
         softBody.mesh.bind(commandBuffer);
-        m_graphicsPipelineLayout.pushConstants(commandBuffer, sizeof(glm::vec3), &softBody.color);
+        m_graphicsPipelineLayout.pushConstants(commandBuffer, sizeof(Material), &m_material);
         vkCmdDrawIndexed(commandBuffer, softBody.mesh.getIndexCount(), 1, 0, 0, 0);
     }
 
     m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_floorDescriptorSet.get(0) });
-    m_graphicsPipelineLayout.pushConstants(commandBuffer, sizeof(glm::vec3), &white);
+    m_graphicsPipelineLayout.pushConstants(commandBuffer, sizeof(Material), &m_floorMaterial);
     m_floorMesh.bind(commandBuffer);
     vkCmdDrawIndexed(commandBuffer, m_floorMesh.getIndexCount(), 1, 0, 0, 0);
 
@@ -216,6 +216,8 @@ void Renderer::createResources()
 
     m_texture = m_resources.loadTexture("assets/textures/texture.jpg");
     m_sampler.init(m_device);
+    m_material.roughness = 0.5f;
+    m_material.metallic = 0.0f;
 
     static float scale = 200.0f;
     static float uvScale = 50.0f;
@@ -250,6 +252,10 @@ void Renderer::createResources()
     MeshData floorMeshData = { floorVertices, floorIndices };
     m_floorMesh.init(m_device, m_commandPool, &floorMeshData);
     m_floorTexture = m_resources.loadTexture("assets/textures/check.jpg");
+
+    m_floorMaterial.tint = glm::vec3(1.0f);
+    m_floorMaterial.roughness = 1.0f;
+    m_floorMaterial.metallic = 0.0f;
 }
 
 SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset, int resolution)
@@ -415,13 +421,25 @@ void Renderer::renderImGui()
 
         ImGui::Begin("Scene settings");
 
-        ImGui::SliderFloat4("Global ambient", (float*)&ubo.globalAmbient, 0.0f, 1.0f);
-        ImGui::SliderFloat3("Light position", (float*)&ubo.lightPos, -10.0f, 10.0f);
-        ImGui::SliderFloat("Light intensity", &ubo.lightIntensity, -1.0f, 10.0f);
-        ImGui::SliderFloat("Light cone", &ubo.lightCone, 0.0f, 1.0f);
-        ImGui::SliderFloat("Specular power", &ubo.specPower, 0.0f, 100.0f);
+        static glm::vec3 rot = glm::vec3(45.0f, 0.0f, -45.0f);
+        ImGui::SliderFloat3("Light rotation", (float*)&rot, -180.0f, 180.0f);
+        ImGui::SliderFloat("Light intensity", &ubo.lightIntensity, 0.0f, 10.0f);
+        ImGui::SliderFloat("Ambient", &ubo.ambient, 0.0f, 1.0f);
+        ImGui::SliderFloat("Fresnel", &ubo.fresnel, 0.0f, 1.0f);
+        ubo.lightDir = glm::rotate(glm::mat4(1.0f), glm::radians(rot.z), glm::vec3(0.0f, 0.0f, 1.0f)) *
+                       glm::rotate(glm::mat4(1.0f), glm::radians(rot.y), glm::vec3(0.0f, 1.0f, 0.0f)) *
+                       glm::rotate(glm::mat4(1.0f), glm::radians(rot.x), glm::vec3(1.0f, 0.0f, 0.0f)) * glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
 
-        ImGui::Text("");
+        ImGui::Text("Floor Material");
+        ImGui::PushID(0);
+        ImGui::SliderFloat("Roughness", &m_floorMaterial.roughness, 0.0f, 1.0f);
+        ImGui::SliderFloat("Metallic", &m_floorMaterial.metallic, 0.0f, 1.0f);
+        ImGui::PopID();
+
+        ImGui::Text("Main Material");
+        ImGui::SliderFloat("Roughness", &m_material.roughness, 0.0f, 1.0f);
+        ImGui::SliderFloat("Metallic", &m_material.metallic, 0.0f, 1.0f);
+
         ImGui::Text("Soft body model");
         ImGui::InputText("Name", m_modelName, 25);
         takeInput = !ImGui::IsItemActive();
@@ -550,13 +568,11 @@ void Renderer::init(Window& window)
     currentFrame = 0;
     GraphicsUBO graphics{};
     graphics.viewProj = m_camera.getMatrix();
-    graphics.globalAmbient = glm::vec4(0.05f);
-    graphics.lightPos = glm::vec3(0.0f, 8.0f, 5.0f);
-    graphics.lightDir = glm::normalize(-graphics.lightPos);
-    graphics.lightCone = 0.8f;
-    graphics.lightIntensity = 8.0f;
-    graphics.specPower = 100.0f;
     graphics.camPos = m_camera.getPosition();
+    graphics.lightDir = glm::normalize(glm::vec3(-1.0f, 0.2f, -0.5f));
+    graphics.lightIntensity = 2.0f;
+    graphics.ambient = 0.05f;
+    graphics.fresnel = 0.04f;
 
     m_viewport.x = 0.0f;
     m_viewport.y = (float)m_swapChain.getExtent().height;
@@ -581,7 +597,7 @@ void Renderer::init(Window& window)
     m_meshDescriptorSet.init(m_device, m_graphicsDescriptorSetLayout, 1);
     m_floorDescriptorSet.init(m_device, m_graphicsDescriptorSetLayout, 1);
 
-    m_graphicsPipelineLayout.init(m_device, &m_graphicsDescriptorSetLayout, sizeof(glm::vec3));
+    m_graphicsPipelineLayout.init(m_device, &m_graphicsDescriptorSetLayout, sizeof(Material));
     m_graphicsPipeline.initGraphics(
         m_device, 
         m_graphicsPipelineLayout, 

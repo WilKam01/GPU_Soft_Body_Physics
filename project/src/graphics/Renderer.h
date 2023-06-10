@@ -20,11 +20,9 @@ struct GraphicsUBO
 	glm::mat4 viewProj;
 	glm::vec3 camPos;
 	float lightIntensity;
-	glm::vec3 lightPos;
-	float lightCone;
 	glm::vec3 lightDir;
-	float specPower;
-	glm::vec4 globalAmbient;
+	float ambient;
+	float fresnel;
 };
 
 struct PbdUBO
@@ -32,6 +30,13 @@ struct PbdUBO
 	float deltaTime;
 	float edgeCompliance;
 	float volumeCompliance;
+};
+
+struct Material
+{
+	glm::vec3 tint;
+	float roughness;
+	float metallic;
 };
 
 struct SoftBody
@@ -129,9 +134,6 @@ private:
 	Pipeline m_recalcNormalsPipeline;
 	Pipeline m_normalizeNormalsPipeline;
 
-	Texture m_texture;
-	Sampler m_sampler;
-
 	uint32_t m_loadSoftBodies = 0; // Used to load soft bodies after button has been pressed, happens after old bodies have been destroyed
 	std::array<SoftBody, MAX_SOFT_BODY_COUNT> m_softBodies;
 	std::vector<SoftBody*> m_removeBodies; // Removed after their execution is done
@@ -152,7 +154,11 @@ private:
 	std::vector<float> m_avgCenterError;
 	std::array<std::vector<glm::vec3>, 2> m_avgCenterPos; // Average center of full res tetrahedral mesh and lower res tetrahedral mesh
 
+	Sampler m_sampler;
+	Texture m_texture;
+	Material m_material;
 	Texture m_floorTexture;
+	Material m_floorMaterial;
 	Mesh m_floorMesh;
 
 	VkViewport m_viewport;
