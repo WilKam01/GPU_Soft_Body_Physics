@@ -1,13 +1,15 @@
 #version 450
 
-layout(set = 0, binding = 0) uniform UBO {
-    mat4 viewProj;
+layout(set = 0, binding = 1) uniform UBO {
     vec3 camPos;
 	float lightIntensity;
 	vec3 lightDir;
 	float ambient;
 	float fresnel;
+	float shadowAlpha;
 } ubo;
+
+layout(set = 0, binding = 2) uniform sampler2D shadowTex;
 
 layout(push_constant) uniform constants
 {
@@ -16,15 +18,17 @@ layout(push_constant) uniform constants
 	float metallic;
 } pushConstants;
 
-layout(set = 1, binding = 0) uniform sampler2D texSampler;
+layout(set = 1, binding = 0) uniform sampler2D tex;
 
 layout(location = 0) in vec3 worldPos;
-layout(location = 1) in vec3 worldNormal;
-layout(location = 2) in vec2 uvCoord;
+layout(location = 1) in vec4 lightPos;
+layout(location = 2) in vec3 worldNormal;
+layout(location = 3) in vec2 uvCoord;
 
 layout(location = 0) out vec4 outColor;
 
 #define PI 3.1415926559
+#define epsilon 0.0025
 
 float DistributionGGX(vec3 N, vec3 H, float roughness)
 {
@@ -55,28 +59,59 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 	return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+float getShadow(vec4 shadowCoord, vec2 off, vec3 normal)
+{
+	vec2 uv = vec2(0.5 * shadowCoord.x + 0.5, -0.5 * shadowCoord.y + 0.5);
+	shadowCoord.z -= epsilon;
+	return (
+		texture(shadowTex, uv + off).r < shadowCoord.z &&
+		dot(ubo.lightDir, normal) < 0.0 && 
+		abs(shadowCoord.z) < 1.0
+	) ? 1.0 - ubo.shadowAlpha : 1.0;
+}
+
+float filterPCF(vec4 sc, vec3 normal)
+{
+
+	float d = 1.0 / float(textureSize(shadowTex, 0).x);
+	float shadowFactor = 0.0;
+	int count = 0;
+	int range = 2;
+	
+	for (int x = -range; x <= range; x++)
+	{
+		for (int y = -range; y <= range; y++)
+		{
+			shadowFactor += getShadow(sc, vec2(d*x, d*y), normal);
+			count++;
+		}
+	
+	}
+	return shadowFactor / count;
+}
+
 void main() 
 {
 	vec3 N = worldNormal;
 	vec3 V = normalize(ubo.camPos - worldPos);
-	vec3 tex = texture(texSampler, uvCoord).rgb;
+	vec3 tex = texture(tex, uvCoord).rgb;
 	float lightness = (tex.r + tex.g + tex.b) / 3.0;
 
 	vec3 albedo = tex * pushConstants.tint;
-	float roughness = lightness * pushConstants.roughness;
-	float metallic = lightness * pushConstants.metallic;
+	float roughness = pushConstants.roughness;
+	float metallic = pushConstants.metallic;
 
 	vec3 F0 = vec3(ubo.fresnel);
 	F0 = mix(F0, albedo, metallic);
 
 	// Reflectance equation
 	vec3 Lo = vec3(0.0);
+	float shadow = 0.0;
 	
 		// For every active light
 		vec3 L = -ubo.lightDir;
 		vec3 H = normalize(V + L);
-		//float attenuation = smoothstep(0.6, 1.0, dot(L, -ubo.lightDir));
-		vec3 radiance = vec3(1.0) /** attenuation*/ * ubo.lightIntensity;
+		vec3 radiance = vec3(1.0) * ubo.lightIntensity;
 
 		float D = DistributionGGX(N, H, roughness * roughness);
 		float G = GeometrySmith(N, V, L, roughness);
@@ -91,11 +126,13 @@ void main()
 
 		Lo += (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
 
+	shadow = filterPCF(lightPos / lightPos.w, N);
 	vec3 ambient = vec3(ubo.ambient) * albedo;
 	vec3 color = ambient + Lo;
 
 	color = color / (color + vec3(1.0));
 	color = pow(color, vec3(1.0/2.2));
+	color *= vec3(shadow);
 
 	color = mix(color, vec3(0.1), clamp((length(ubo.camPos - worldPos) - 10.0) / 75.0, 0.0, 1.0)); // Fade into background
 	outColor = vec4(color, 1.0);

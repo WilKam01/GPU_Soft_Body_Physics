@@ -54,7 +54,7 @@ void ImGuiRenderer::createRenderPass()
     renderPassInfo.pDependencies = &dependency;
 
     if (vkCreateRenderPass(p_device->getLogical(), &renderPassInfo, nullptr, &m_renderPass) != VK_SUCCESS)
-        LOG_ERROR("Failed to create ImGui Render pass.");
+        LOG_ERROR("Failed to create ImGui render pass.");
 }
 
 void ImGuiRenderer::createFramebuffers()
@@ -114,7 +114,7 @@ void ImGuiRenderer::init(Window& window, Instance& instance, Device& device, Swa
     poolInfo.pPoolSizes = poolSizes;
 
     if (vkCreateDescriptorPool(device.getLogical(), &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
-        LOG_ERROR("Failed to create ImGui Descriptor pool!");
+        LOG_ERROR("Failed to create ImGui descriptor pool!");
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();

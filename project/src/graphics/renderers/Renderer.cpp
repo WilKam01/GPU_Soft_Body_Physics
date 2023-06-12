@@ -4,6 +4,29 @@
 
 void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
+    static float orthoSize = 15.0f;
+    static float dist = 15.0f;
+
+    glm::mat4 lightMatrix = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, 0.1f, 100.0f);
+    lightMatrix *= glm::lookAt(-m_graphicsUBO[currentFrame].get().lightDir * dist, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+    m_matricesUBO[currentFrame].get().viewProj = m_camera.getMatrix();
+    m_matricesUBO[currentFrame].get().light = lightMatrix;
+    m_matricesUBO[currentFrame].update();
+
+    m_shadowRenderer.bind(commandBuffer, lightMatrix);
+
+    for (auto& softBody : m_softBodies)
+    {
+        if (!softBody.active)
+            break;
+
+        softBody.mesh.bind(commandBuffer);
+        vkCmdDrawIndexed(commandBuffer, softBody.mesh.getIndexCount(), 1, 0, 0, 0);
+    }
+
+    vkCmdEndRenderPass(commandBuffer);
+
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassInfo.renderPass = m_swapChain.getRenderPass();
@@ -18,20 +41,16 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
     renderPassInfo.pClearValues = clearValues.data();
 
-    vkCmdSetViewport(commandBuffer, 0, 1, &m_viewport);
-    vkCmdSetScissor(commandBuffer, 0, 1, &m_scissor);
-
+    m_renderArea.bind(commandBuffer);
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline.get());
 
     m_graphicsPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, { m_graphicsDescriptorSet.get(currentFrame), m_meshDescriptorSet.get(0)});
-    int counter = 0;
     for (auto& softBody : m_softBodies)
     {
         if (!softBody.active)
             break;
         
-        counter++;
         m_material.tint = softBody.color;
         softBody.mesh.bind(commandBuffer);
         m_graphicsPipelineLayout.pushConstants(commandBuffer, sizeof(Material), &m_material);
@@ -339,24 +358,8 @@ void Renderer::recreateSwapChain()
 {
     m_swapChain.recreate();
 
-    m_viewport.x = 0.0f;
-    m_viewport.y = (float)m_swapChain.getExtent().height;
-    m_viewport.width = (float)m_swapChain.getExtent().width;
-    m_viewport.height = -((float)m_swapChain.getExtent().height);
-    m_viewport.minDepth = 0.0f;
-    m_viewport.maxDepth = 1.0f;
-    
-    m_scissor.offset = { 0, 0 };
-    m_scissor.extent = m_swapChain.getExtent();
-
+    m_renderArea.init(m_swapChain.getExtent());
     m_camera.updateAspectRatio(m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height);
-
-    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        m_graphicsUBO[i].get().viewProj = m_camera.getMatrix();
-        m_graphicsUBO[i].update();
-    }
-
     m_imGuiRenderer.recreateFramebuffers();
 
     m_timer.reset();
@@ -426,6 +429,7 @@ void Renderer::renderImGui()
         ImGui::SliderFloat("Light intensity", &ubo.lightIntensity, 0.0f, 10.0f);
         ImGui::SliderFloat("Ambient", &ubo.ambient, 0.0f, 1.0f);
         ImGui::SliderFloat("Fresnel", &ubo.fresnel, 0.0f, 1.0f);
+        ImGui::SliderFloat("Shadow aplha", &ubo.shadowAlpha, 0.0f, 1.0f);
         ubo.lightDir = glm::rotate(glm::mat4(1.0f), glm::radians(rot.z), glm::vec3(0.0f, 0.0f, 1.0f)) *
                        glm::rotate(glm::mat4(1.0f), glm::radians(rot.y), glm::vec3(0.0f, 1.0f, 0.0f)) *
                        glm::rotate(glm::mat4(1.0f), glm::radians(rot.x), glm::vec3(1.0f, 0.0f, 0.0f)) * glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
@@ -548,7 +552,6 @@ void Renderer::renderImGui()
     m_camera.setPosition(camPos);
     m_camera.setRotation(camRot);
     ubo.camPos = camPos;
-    ubo.viewProj = m_camera.getMatrix();
 
     m_graphicsUBO[currentFrame].get() = ubo;
     m_graphicsUBO[currentFrame].update();
@@ -567,27 +570,20 @@ void Renderer::init(Window& window)
 
     currentFrame = 0;
     GraphicsUBO graphics{};
-    graphics.viewProj = m_camera.getMatrix();
     graphics.camPos = m_camera.getPosition();
     graphics.lightDir = glm::normalize(glm::vec3(-1.0f, 0.2f, -0.5f));
-    graphics.lightIntensity = 2.0f;
+    graphics.lightIntensity = 2.5f;
     graphics.ambient = 0.05f;
     graphics.fresnel = 0.04f;
+    graphics.shadowAlpha = 0.35f;
 
-    m_viewport.x = 0.0f;
-    m_viewport.y = (float)m_swapChain.getExtent().height;
-    m_viewport.width = (float)m_swapChain.getExtent().width;
-    m_viewport.height = -((float)m_swapChain.getExtent().height);
-    m_viewport.minDepth = 0.0f;
-    m_viewport.maxDepth = 1.0f;
-
-    m_scissor.offset = { 0, 0 };
-    m_scissor.extent = m_swapChain.getExtent();
-
+    m_renderArea.init(m_swapChain.getExtent());
     m_graphicsDescriptorSetLayout.init(m_device,
     {
         {
-            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT }
+            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT },
+            { 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT },
+            { 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT }
         },
         {
             { 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT }
@@ -611,7 +607,9 @@ void Renderer::init(Window& window)
     m_tetDescriptorSetLayout.init(m_device,
     {
         {
-            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT }
+            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT },
+            { 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT },
+            { 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT }
         },
         {
             { 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT },
@@ -667,11 +665,13 @@ void Renderer::init(Window& window)
     m_recalcNormalsPipeline.initCompute(m_device, m_deformPipelineLayout, "assets/spv/recalculate_normals.comp.spv");
     m_normalizeNormalsPipeline.initCompute(m_device, m_deformPipelineLayout, "assets/spv/normalize_normals.comp.spv");
 
+    m_matricesUBO.resize(MAX_FRAMES_IN_FLIGHT);
     m_graphicsUBO.resize(MAX_FRAMES_IN_FLIGHT);
     m_pbdUBO.resize(MAX_FRAMES_IN_FLIGHT);
     float dt = (1.0f / (float)m_fixedTimeStep) / m_subSteps;
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
+        m_matricesUBO[i].init(m_device, {});
         m_graphicsUBO[i].init(m_device, graphics);
         m_pbdUBO[i].init(m_device, { dt, 0.01f, 0.0f });
     }
@@ -685,6 +685,8 @@ void Renderer::init(Window& window)
     createSyncObjects();
 
     m_imGuiRenderer.init(window, m_instance, m_device, m_swapChain, m_commandPool);
+    m_shadowRenderer.init(m_device, m_swapChain, m_commandPool, 2048);
+    m_shadowSampler.init(m_device, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER, VK_SAMPLER_MIPMAP_MODE_NEAREST);
     m_resources.init(m_device, m_commandPool);
 
     createResources();
@@ -694,7 +696,9 @@ void Renderer::init(Window& window)
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        m_graphicsDescriptorSet.writeBuffer(i, 0, m_graphicsUBO[i]);
+        m_graphicsDescriptorSet.writeBuffer(i, 0, m_matricesUBO[i]);
+        m_graphicsDescriptorSet.writeBuffer(i, 1, m_graphicsUBO[i]);
+        m_graphicsDescriptorSet.writeTexture(i, 2, m_shadowRenderer.getDepthTexture(), m_shadowSampler);
         m_pbdDescriptorSet.writeBuffer(i, 0, m_pbdUBO[i]);
     }
 
@@ -706,6 +710,7 @@ void Renderer::cleanup()
     m_device.waitIdle();
     VkDevice device = m_device.getLogical();
 
+    m_shadowRenderer.cleanup();
     m_imGuiRenderer.cleanup();
 
     for (auto& softBody : m_softBodies)
@@ -714,6 +719,7 @@ void Renderer::cleanup()
     m_floorTexture.cleanup();
     m_floorMesh.cleanup();
 
+    m_shadowSampler.cleanup();
     m_sampler.cleanup();
     m_texture.cleanup();
 
@@ -737,6 +743,7 @@ void Renderer::cleanup()
     {
         m_pbdUBO[i].cleanup();
         m_graphicsUBO[i].cleanup();
+        m_matricesUBO[i].cleanup();
     }
 
     m_normalizeNormalsPipeline.cleanup();

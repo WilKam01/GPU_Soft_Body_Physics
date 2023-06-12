@@ -2,7 +2,6 @@
 
 layout(set = 0, binding = 0) uniform UBO {
     mat4 viewProj;
-    vec3 camPos;
 } ubo;
 
 struct Particle
@@ -40,5 +39,5 @@ void main()
 
     vec3 pos = particles[tetrahedrals[gl_InstanceIndex].indices[indices[gl_VertexIndex]]].position.xyz;
     gl_Position = ubo.viewProj * vec4(pos, 1.0);
-    fragColor = vec3(1.0 / gl_Position.z);
+    fragColor = vec3(pow(1.0 / gl_Position.z, 1.0 / 2.2));
 }

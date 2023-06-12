@@ -111,7 +111,7 @@ void DescriptorSet::writeBuffer(size_t i, uint32_t binding, Buffer& buffer, VkDe
 void DescriptorSet::writeTexture(size_t i, uint32_t binding, Texture& texture, Sampler& sampler)
 {
     VkDescriptorImageInfo imageInfo{};
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfo.imageLayout = texture.isDepth() ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     imageInfo.imageView = texture.getView();
     imageInfo.sampler = sampler.get();
 

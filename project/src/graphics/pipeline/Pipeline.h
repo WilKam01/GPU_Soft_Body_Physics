@@ -16,8 +16,9 @@ private:
 	Device* p_device;
 	DescriptorSetLayout* p_descriptorSetLayout;
 	VkPipelineLayout m_layout;
+	VkShaderStageFlags m_pushConstantShaderStage;
 public:
-	void init(Device& device, DescriptorSetLayout* layout = nullptr, uint32_t pushConstantSize = 0);
+	void init(Device& device, DescriptorSetLayout* layout = nullptr, uint32_t pushConstantSize = 0, VkShaderStageFlags pushConstantShaderStage = VK_SHADER_STAGE_FRAGMENT_BIT);
 	void cleanup();
 
 	void bindDescriptors(VkCommandBuffer commandBuffer, VkPipelineBindPoint bindPoint, const std::vector<VkDescriptorSet>& descriptorSets);
@@ -44,6 +45,14 @@ public:
 		VkRenderPass renderPass,
 		const std::string& vertexShaderPath,
 		const std::string& fragmentShaderPath,
+		PipelineSettings settings,
+		VertexStreamInput inputStreams
+	);
+	void initGraphics(
+		Device& device,
+		PipelineLayout& layout,
+		VkRenderPass renderPass,
+		const std::string& vertexShaderPath,
 		PipelineSettings settings,
 		VertexStreamInput inputStreams
 	);

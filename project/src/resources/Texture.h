@@ -16,6 +16,7 @@ private:
 	glm::uvec2 m_dimensions;
 
 	bool m_hasImageView;
+	bool m_isDepth;
 
 	VkFormat findDepthFormat();
 
@@ -36,7 +37,7 @@ public:
 		VkImageUsageFlags usage, 
 		VkMemoryPropertyFlags properties
 	);
-	void initDepth(Device& device, glm::uvec2 dimensions);
+	void initDepth(Device& device, glm::uvec2 dimensions, VkImageUsageFlagBits additionalUsage = (VkImageUsageFlagBits)0);
 	void cleanup();
 
 	void createImageView(VkImageAspectFlags aspectFlags);
@@ -66,5 +67,6 @@ public:
 	inline VkDeviceMemory getMemory() { return m_memory; }
 	inline VkFormat getFormat() { return m_format; }
 	inline glm::uvec2 getDimensions() { return m_dimensions; }
+	inline bool isDepth() { return m_isDepth; }
 };
 

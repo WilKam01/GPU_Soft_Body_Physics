@@ -1,28 +1,36 @@
 #pragma once
 
-#include "Instance.h"
-#include "Device.h"
-#include "SwapChain.h"
-#include "CommandPool.h"
-#include "CommandBufferArray.h"
-#include "Buffer.h"
+#include "../Instance.h"
+#include "../Device.h"
+#include "../SwapChain.h"
+#include "../CommandPool.h"
+#include "../CommandBufferArray.h"
+#include "../Buffer.h"
 #include "resources/Mesh.h"
-#include "pipeline/Pipeline.h"
-#include "pipeline/UniformBuffer.h"
-#include "pipeline/Sampler.h"
+#include "../pipeline/Pipeline.h"
+#include "../pipeline/UniformBuffer.h"
+#include "../pipeline/Sampler.h"
+#include "../pipeline/RenderArea.h"
 #include "ImGuiRenderer.h"
+#include "ShadowRenderer.h"
 #include "resources/ResourceManager.h"
 #include "core/Timer.h"
 #include "core/Camera.h"
 
-struct GraphicsUBO 
+struct MatricesUBO
 {
 	glm::mat4 viewProj;
+	glm::mat4 light;
+};
+
+struct GraphicsUBO 
+{
 	glm::vec3 camPos;
 	float lightIntensity;
 	glm::vec3 lightDir;
 	float ambient;
 	float fresnel;
+	float shadowAlpha;
 };
 
 struct PbdUBO
@@ -107,6 +115,7 @@ private:
 	SwapChain m_swapChain;
 	VkSurfaceKHR m_surface;
 
+	RenderArea m_renderArea;
 	PipelineLayout m_graphicsPipelineLayout;
 	Pipeline m_graphicsPipeline;
 
@@ -155,20 +164,20 @@ private:
 	std::array<std::vector<glm::vec3>, 2> m_avgCenterPos; // Average center of full res tetrahedral mesh and lower res tetrahedral mesh
 
 	Sampler m_sampler;
+	Sampler m_shadowSampler;
+
 	Texture m_texture;
 	Material m_material;
 	Texture m_floorTexture;
 	Material m_floorMaterial;
 	Mesh m_floorMesh;
 
-	VkViewport m_viewport;
-	VkRect2D m_scissor;
-
 	CommandPool m_commandPool;
-	CommandBufferArray m_commandBufferArray;
 	CommandPool m_computeCommandPool;
+	CommandBufferArray m_commandBufferArray;
 	CommandBufferArray m_computeCommandBufferArray;
 
+	std::vector<UniformBuffer<MatricesUBO>> m_matricesUBO;
 	std::vector<UniformBuffer<GraphicsUBO>> m_graphicsUBO;
 	std::vector<UniformBuffer<PbdUBO>> m_pbdUBO;
 
@@ -181,6 +190,7 @@ private:
 
 	bool m_renderImGui = true;
 	ImGuiRenderer m_imGuiRenderer;
+	ShadowRenderer m_shadowRenderer;
 
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 	void computePhysics(VkCommandBuffer commandBuffer, SoftBody& softBody);

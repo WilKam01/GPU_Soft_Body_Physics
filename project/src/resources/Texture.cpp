@@ -67,6 +67,7 @@ void Texture::init(
     m_dimensions = dimensions;
     m_format = VK_FORMAT_R8G8B8A8_UNORM;
     m_hasImageView = false;
+    m_isDepth = false;
 
     VkDeviceSize size = m_dimensions.x * m_dimensions.y * 4;
 
@@ -119,18 +120,20 @@ void Texture::initEmpty(
     m_dimensions = dimensions;
     m_format = VK_FORMAT_R8G8B8A8_UNORM;
     m_hasImageView = false;
+    m_isDepth = false;
 
     createImage(tiling, usage, properties);
 }
 
-void Texture::initDepth(Device& device, glm::uvec2 dimensions)
+void Texture::initDepth(Device& device, glm::uvec2 dimensions, VkImageUsageFlagBits additionalUsage)
 {
     p_device = &device;
     m_dimensions = dimensions;
     m_format = findDepthFormat();
     m_hasImageView = false;
+    m_isDepth = true;
 
-    createImage(VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    createImage(VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | additionalUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     createImageView(VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 

@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "src/core/Window.h"
-#include "src/graphics/Renderer.h"
+#include "src/graphics/renderers/Renderer.h"
 
 static Window s_window;
 static Renderer s_renderer;
