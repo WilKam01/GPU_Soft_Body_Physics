@@ -571,7 +571,7 @@ void Renderer::init(Window& window)
     currentFrame = 0;
     GraphicsUBO graphics{};
     graphics.camPos = m_camera.getPosition();
-    graphics.lightDir = glm::normalize(glm::vec3(-1.0f, 0.2f, -0.5f));
+    graphics.lightDir = glm::vec3(0.0f);
     graphics.lightIntensity = 2.5f;
     graphics.ambient = 0.05f;
     graphics.fresnel = 0.04f;

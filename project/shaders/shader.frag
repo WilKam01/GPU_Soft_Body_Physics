@@ -132,23 +132,8 @@ void main()
 
 	color = color / (color + vec3(1.0));
 	color = pow(color, vec3(1.0/2.2));
-	color *= vec3(shadow);
+	color *= shadow;
 
 	color = mix(color, vec3(0.1), clamp((length(ubo.camPos - worldPos) - 10.0) / 75.0, 0.0, 1.0)); // Fade into background
 	outColor = vec4(color, 1.0);
-
-//	vec3 toLight = ubo.lightPos - worldPos;
-//	vec3 toLightDir = normalize(toLight);
-//	vec3 toCamDir = normalize(ubo.camPos - worldPos);
-//	vec3 halfwayDir = normalize(toLightDir + toCamDir);
-//	float attentuation = 1.0 / (1.0 + length(toLight));
-//
-//	vec3 diffuse = texture(texSampler, uvCoord).rgb * clamp(dot(worldNormal, toLightDir), 0.0, 1.0) * pushConstants.color;
-//	vec3 specular = vec3(0.05) * pow(max(dot(worldNormal, halfwayDir), 0.0), ubo.specPower);
-//
-//	vec3 final = ubo.globalAmbient.xyz * texture(texSampler, uvCoord).rgb * pushConstants.color;
-//	final += (diffuse + specular) * ubo.lightIntensity * attentuation * clamp((dot(-toLightDir, ubo.lightDir) - ubo.lightCone) / (1.0 - ubo.lightCone), 0.0, 1.0);
-//	final = mix(final, vec3(0.01), min(max(length(ubo.camPos - worldPos) - 15.0, 0.0) / 50.0, 1.0)); // Fade into background
-//
-//	outColor = vec4(final, 1.0);
 }

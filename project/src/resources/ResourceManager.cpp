@@ -8,6 +8,8 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 
+#include "core/SpatialHash.h"
+
 void ResourceManager::init(Device& device, CommandPool& commandPool)
 {
     s_device = &device;
@@ -207,13 +209,19 @@ SoftBodyData* ResourceManager::getSoftBody(std::string name, int resolution)
     // Barycentric weights
     if(resolution != 100)
     {
-        data.deformationInfo.resize(data.mesh->vertices.positions.size());
-        // Tetrahedral info
-        int tetCount = (int)data.tetMesh.tets.size();
-        std::vector<glm::vec4> tetCenters(tetCount); // w component is max radius
-        std::vector<glm::mat3> tetMatrices(tetCount);
+        int posCount = (int)data.mesh->vertices.positions.size();
+        data.deformationInfo.resize(posCount);
 
-        for (int i = 0; i < tetCount; i++)
+        std::vector<glm::vec3> positions(posCount);
+        for (int i = 0; i < posCount; i++)
+            positions[i] = data.mesh->vertices.positions[i].vec;
+
+        SpatialHash hash;
+        hash.init(0.25f, positions);
+        std::vector<float> minDist(posCount, FLT_MAX);
+
+        // Iterate all tetrahedra
+        for (int i = 0, len = (int)data.tetMesh.tets.size(); i < len; i++)
         {
             glm::uvec4 indices = data.tetMesh.tets[i].indices;
             glm::vec3 tetCenter =
@@ -226,35 +234,34 @@ SoftBodyData* ResourceManager::getSoftBody(std::string name, int resolution)
             for (int j = 0; j < 4; j++)
             {
                 glm::vec3 diff = data.tetMesh.particles[indices[j]].position - tetCenter;
-                maxRadius = std::max(maxRadius, glm::dot(diff, diff));
+                maxRadius = std::max(maxRadius, glm::length(diff));
             }
+            maxRadius += 0.1f;
 
-            tetCenters[i] = glm::vec4(tetCenter.x, tetCenter.y, tetCenter.z, maxRadius + 0.025f);
-            tetMatrices[i] = glm::inverse(
+            glm::mat3 matrix = glm::inverse(
                 glm::mat3(
                     data.tetMesh.particles[indices[0]].position - data.tetMesh.particles[indices[3]].position,
                     data.tetMesh.particles[indices[1]].position - data.tetMesh.particles[indices[3]].position,
                     data.tetMesh.particles[indices[2]].position - data.tetMesh.particles[indices[3]].position
                 )
             );
-        }
 
-        // Apply to mesh vertices
-        for (int i = 0, len = (int)data.deformationInfo.size(); i < len; i++)
-        {
-            float minDist = FLT_MAX;
-            for (int j = 0; j < tetCount; j++)
+            // Get nearby vertices
+            std::vector<uint32_t> ids = hash.query(tetCenter, maxRadius);
+            for (auto id : ids)
             {
-                glm::vec3 diff = data.mesh->vertices.positions[i].vec - glm::vec3(tetCenters[j].x, tetCenters[j].y, tetCenters[j].z);
-                float dist = glm::dot(diff, diff);
-                if (dist > tetCenters[j].w)
+                if (minDist[id] <= 0.0f)
                     continue;
 
-                diff = data.mesh->vertices.positions[i].vec - data.tetMesh.particles[data.tetMesh.tets[j].indices[3]].position;
-                diff = tetMatrices[j] * diff;
+                glm::vec3 diff = positions[id] - tetCenter;
+                if (glm::dot(diff, diff) > maxRadius * maxRadius)
+                    continue;
+
+                diff = positions[id] - data.tetMesh.particles[data.tetMesh.tets[i].indices[3]].position;
+                diff = matrix * diff;
 
                 // Invalid bary coordinates
-                if (isnan(diff.x) || isnan(diff.x) || isnan(diff.x))
+                if (isnan(diff.x) || isnan(diff.y) || isnan(diff.z))
                     continue;
 
                 float baryCoords[4]{ diff.x, diff.y, diff.z, 1.0f - (diff.x + diff.y + diff.z) };
@@ -262,15 +269,11 @@ SoftBodyData* ResourceManager::getSoftBody(std::string name, int resolution)
                 for (int k = 0; k < 4; k++)
                     maxDist = std::max(maxDist, -baryCoords[k]);
 
-                if (maxDist < minDist)
+                if (maxDist < minDist[id])
                 {
-                    minDist = maxDist;
-                    data.deformationInfo[i].tetId = j;
-                    data.deformationInfo[i].weights = glm::vec3(baryCoords[0], baryCoords[1], baryCoords[2]);
-
-                    // Surrounded by tetrhedral
-                    if (maxDist <= 0.0f)
-                        break;
+                    minDist[id] = maxDist;
+                    data.deformationInfo[id].tetId = i;
+                    data.deformationInfo[id].weights = glm::vec3(baryCoords[0], baryCoords[1], baryCoords[2]);
                 }
             }
         }
