@@ -90,6 +90,19 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdEndRenderPass(commandBuffer);
 }
 
+void Renderer::detectCollisions(VkCommandBuffer commandBuffer, SoftBody& softBody)
+{
+    static uint32_t zero = 0;
+    softBody.colSizeBuffer[currentFrame].map();
+    softBody.colSizeBuffer[currentFrame].writeTo(&zero, sizeof(uint32_t));
+    softBody.colSizeBuffer[currentFrame].unmap();
+
+    m_colPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, { m_colDescriptorSet.get(currentFrame), softBody.colDescriptorSet.get(currentFrame) });
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_staticColDetectionPipeline.get());
+    vkCmdDispatch(commandBuffer, (m_colUBO[currentFrame].get().triCount + 31) / 32, 1, 1);
+}
+
 void Renderer::computePhysics(VkCommandBuffer commandBuffer, SoftBody& softBody)
 {
     VkMemoryBarrier memoryBarrier = {};
@@ -113,6 +126,13 @@ void Renderer::computePhysics(VkCommandBuffer commandBuffer, SoftBody& softBody)
         0,
         nullptr);
 
+    m_colPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, { m_colDescriptorSet.get(currentFrame), softBody.colDescriptorSet.get(currentFrame) });
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_colConstraintPipeline.get());
+    vkCmdDispatch(commandBuffer, (MAX_COLLISION_CONSTRAINT_COUNT + 31) / 32, 1, 1);
+
+    m_pbdPipelineLayout.bindDescriptors(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, { m_pbdDescriptorSet.get(currentFrame), softBody.pbdDescriptorSet.get(0) });
+    
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_stretchConstraintPipeline.get());
     vkCmdDispatch(commandBuffer, (softBody.tetMesh.getEdgeCount() + 31) / 32, 1, 1);
 
@@ -129,6 +149,7 @@ void Renderer::computePhysics(VkCommandBuffer commandBuffer, SoftBody& softBody)
         nullptr,
         0,
         nullptr);
+    
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_postsolvePipeline.get());
     vkCmdDispatch(commandBuffer, (softBody.tetMesh.getParticleCount() + 31) / 32, 1, 1);
@@ -275,6 +296,48 @@ void Renderer::createResources()
     m_floorMaterial.tint = glm::vec3(1.0f);
     m_floorMaterial.roughness = 1.0f;
     m_floorMaterial.metallic = 0.0f;
+
+    // Collision data
+    VkDeviceSize bufferSize = sizeof(avec3) * floorVertices.positions.size();
+    Buffer stagingBuffer;
+    stagingBuffer.init(m_device,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        bufferSize,
+        (void*)floorVertices.positions.data()
+    );
+
+    m_colPositionsBuffer.init(m_device,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        bufferSize
+    );
+
+    m_commandPool.copyBuffer(stagingBuffer, m_colPositionsBuffer, bufferSize);
+    stagingBuffer.cleanup();
+
+    bufferSize = sizeof(uint32_t) * floorIndices.size();
+    stagingBuffer.init(m_device,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        bufferSize,
+        (void*)floorIndices.data()
+    );
+
+    m_colIndicesBuffer.init(m_device,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        bufferSize
+    );
+
+    m_commandPool.copyBuffer(stagingBuffer, m_colIndicesBuffer, bufferSize);
+    stagingBuffer.cleanup();
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        m_colUBO[i].get().triCount = (uint32_t)floorIndices.size() / 3;
+        m_colUBO[i].update();
+    }
 }
 
 SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset, int resolution)
@@ -310,8 +373,35 @@ SoftBody Renderer::createSoftBody(const std::string& name, glm::vec3 offset, int
     softBody.deformDescriptorSet.writeBuffer(0, 4, softBody.tetMesh.getPbdPosBuffer());
     softBody.deformDescriptorSet.writeBuffer(0, 6, softBody.tetMesh.getTetBuffer());
 
+    softBody.colDescriptorSet.init(m_device, m_colDescriptorSetLayout, 1, MAX_FRAMES_IN_FLIGHT);
+    softBody.colSizeBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+    softBody.colConstraintBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        softBody.colSizeBuffer[i].init(m_device,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            sizeof(uint32_t),
+            0
+        );
+
+        softBody.colConstraintBuffer[i].init(m_device,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            sizeof(ColConstraint) * MAX_COLLISION_CONSTRAINT_COUNT,
+            0
+        );
+
+        softBody.colDescriptorSet.writeBuffer(i, 0, softBody.pbdUBO);
+        softBody.colDescriptorSet.writeBuffer(i, 1, softBody.tetMesh.getParticleBuffer());
+        softBody.colDescriptorSet.writeBuffer(i, 2, softBody.tetMesh.getPbdPosBuffer());
+        softBody.colDescriptorSet.writeBuffer(i, 3, softBody.colSizeBuffer[i]);
+        softBody.colDescriptorSet.writeBuffer(i, 4, softBody.colConstraintBuffer[i]);
+    }
+
     Buffer stagingBuffer;
     VkDeviceSize bufferSize = 0;
+
     // No tetrahedral deformation
     if (resolution == 100)
     {
@@ -420,6 +510,9 @@ void Renderer::renderImGui()
         m_pbdUBO[currentFrame].get() = pbd;
         m_pbdUBO[currentFrame].update();
 
+        m_colUBO[currentFrame].get().deltaTime = timeStep;
+        m_colUBO[currentFrame].update();
+
         ImGui::End();
 
         ImGui::Begin("Scene settings");
@@ -507,12 +600,17 @@ void Renderer::renderImGui()
     if (ImGui::IsKeyPressed(ImGuiKey_H) && takeInput)
         m_renderImGui = !m_renderImGui;
 
-    glm::vec3 camPos = m_camera.getPosition();
-    glm::vec3 camRot = m_camera.getRotation();
     if (takeInput)
     {
-        camPos += moveDir * m_timer.getDT() * 10.0f;
+        glm::vec3 camPos = m_camera.getPosition();
+        glm::vec3 camRot = m_camera.getRotation();
+
         camRot += rotDir * m_timer.getDT() * 100.0f;
+        m_camera.setRotation(camRot);
+
+        camPos += m_camera.toLocal(moveDir) * m_timer.getDT() * 10.0f;
+        m_camera.setPosition(camPos);
+        ubo.camPos = camPos;
     }
 
     if (ImGui::IsKeyPressed(ImGuiKey_P) && takeInput)
@@ -549,10 +647,6 @@ void Renderer::renderImGui()
     if (ImGui::IsKeyPressed(ImGuiKey_Z) && takeInput)
         m_renderTetMesh = !m_renderTetMesh;
 
-    m_camera.setPosition(camPos);
-    m_camera.setRotation(camRot);
-    ubo.camPos = camPos;
-
     m_graphicsUBO[currentFrame].get() = ubo;
     m_graphicsUBO[currentFrame].update();
 
@@ -566,7 +660,12 @@ void Renderer::init(Window& window)
 	m_device.init(m_instance, m_surface);
 	m_swapChain.init(m_device, m_surface, window);
 
-    m_camera.init(glm::vec3(0.0f, 5.0f, 6.0f), glm::vec3(-30.0f, 0.0f, 0.0f), 90.0f, m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height);
+    m_camera.init(
+        glm::vec3(0.0f, 5.0f, 6.0f),
+        glm::vec3(-30.0f, 0.0f, 0.0f),
+        90.0f,
+        m_swapChain.getExtent().width / (float)m_swapChain.getExtent().height
+    );
 
     currentFrame = 0;
     GraphicsUBO graphics{};
@@ -647,6 +746,26 @@ void Renderer::init(Window& window)
     m_volumeConstraintPipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/volume_constraint.comp.spv");
     m_postsolvePipeline.initCompute(m_device, m_pbdPipelineLayout, "assets/spv/postsolve.comp.spv");
 
+    m_colDescriptorSetLayout.init(m_device,
+    {
+        {
+            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
+        },
+        {
+            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT },
+            { 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT }
+        }
+    });
+    m_colDescriptorSet.init(m_device, m_colDescriptorSetLayout, 0, MAX_FRAMES_IN_FLIGHT);
+    m_colPipelineLayout.init(m_device, &m_colDescriptorSetLayout);
+    m_staticColDetectionPipeline.initCompute(m_device, m_colPipelineLayout, "assets/spv/static_collision_detection.comp.spv");
+    m_colConstraintPipeline.initCompute(m_device, m_colPipelineLayout, "assets/spv/collision_constraint.comp.spv");
+
     m_deformDescriptorSetLayout.init(m_device,
     {
         {
@@ -668,12 +787,16 @@ void Renderer::init(Window& window)
     m_matricesUBO.resize(MAX_FRAMES_IN_FLIGHT);
     m_graphicsUBO.resize(MAX_FRAMES_IN_FLIGHT);
     m_pbdUBO.resize(MAX_FRAMES_IN_FLIGHT);
-    float dt = (1.0f / (float)m_fixedTimeStep) / m_subSteps;
+    m_colUBO.resize(MAX_FRAMES_IN_FLIGHT);
+
+    float dt = 1.0f / (float)m_fixedTimeStep;
+    float subdt = dt / m_subSteps;
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         m_matricesUBO[i].init(m_device, {});
         m_graphicsUBO[i].init(m_device, graphics);
-        m_pbdUBO[i].init(m_device, { dt, 0.01f, 0.0f });
+        m_pbdUBO[i].init(m_device, { subdt, 0.01f, 0.0f });
+        m_colUBO[i].init(m_device, { dt, 0 });
     }
 
     m_commandPool.init(m_device, VK_PIPELINE_BIND_POINT_GRAPHICS);
@@ -700,6 +823,9 @@ void Renderer::init(Window& window)
         m_graphicsDescriptorSet.writeBuffer(i, 1, m_graphicsUBO[i]);
         m_graphicsDescriptorSet.writeTexture(i, 2, m_shadowRenderer.getDepthTexture(), m_shadowSampler);
         m_pbdDescriptorSet.writeBuffer(i, 0, m_pbdUBO[i]);
+        m_colDescriptorSet.writeBuffer(i, 0, m_colUBO[i]);
+        m_colDescriptorSet.writeBuffer(i, 1, m_colPositionsBuffer);
+        m_colDescriptorSet.writeBuffer(i, 2, m_colIndicesBuffer);
     }
 
     m_timer.init(1.0f / m_fixedTimeStep);
@@ -715,6 +841,9 @@ void Renderer::cleanup()
 
     for (auto& softBody : m_softBodies)
         softBody.cleanup();
+
+    m_colIndicesBuffer.cleanup();
+    m_colPositionsBuffer.cleanup();
 
     m_floorTexture.cleanup();
     m_floorMesh.cleanup();
@@ -741,6 +870,7 @@ void Renderer::cleanup()
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
+        m_colUBO[i].cleanup();
         m_pbdUBO[i].cleanup();
         m_graphicsUBO[i].cleanup();
         m_matricesUBO[i].cleanup();
@@ -752,6 +882,12 @@ void Renderer::cleanup()
     m_deformPipeline.cleanup();
     m_deformPipelineLayout.cleanup();
     m_deformDescriptorSetLayout.cleanup();
+
+    m_colConstraintPipeline.cleanup();
+    m_staticColDetectionPipeline.cleanup();
+    m_colPipelineLayout.cleanup();
+    m_colDescriptorSet.cleanup();
+    m_colDescriptorSetLayout.cleanup();
 
     m_postsolvePipeline.cleanup();
     m_volumeConstraintPipeline.cleanup();
@@ -837,6 +973,21 @@ void Renderer::render()
     m_computeCommandBufferArray.begin(currentFrame);
     if (m_timer.passedFixedDT())
     {
+        for (auto& softBody : m_softBodies)
+        {
+            if (!softBody.active)
+                break;
+
+            /*softBody.colSizeBuffer.map();
+            uint32_t size = *(uint32_t*)softBody.colSizeBuffer.getMapped();
+            softBody.colSizeBuffer.unmap();
+
+            std::cout << "Col size: " << size << "\n";*/
+            detectCollisions(m_computeCommandBufferArray[currentFrame], softBody);
+        }
+
+
+
         for (auto& softBody : m_softBodies)
         {
             if (!softBody.active)

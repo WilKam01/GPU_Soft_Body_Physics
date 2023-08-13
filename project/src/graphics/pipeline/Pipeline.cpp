@@ -93,7 +93,8 @@ void Pipeline::initGraphics(
     const std::string& vertexShaderPath,
     const std::string& fragmentShaderPath,
     PipelineSettings settings,
-    VertexStreamInput inputStreams
+    VertexStreamInput inputStreams,
+    VkPrimitiveTopology topology
 )
 {
     p_device = &device;
@@ -148,7 +149,7 @@ void Pipeline::initGraphics(
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssembly.topology = topology;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
     VkPipelineViewportStateCreateInfo viewportState{};
@@ -201,8 +202,7 @@ void Pipeline::initGraphics(
 
     std::vector<VkDynamicState> dynamicStates = {
         VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR,
-        VK_DYNAMIC_STATE_LINE_WIDTH
+        VK_DYNAMIC_STATE_SCISSOR
     };
 
     VkPipelineDynamicStateCreateInfo dynamicState{};

@@ -48,8 +48,7 @@ private:
 	std::vector<VkDeviceSize> m_offsets;
 	uint32_t m_bufferCount;
 
-	// T - Type of data vector, B - Type of data used in buffer
-	template <typename T, typename B>
+	template <typename T>
 	void addVertexBuffer(CommandPool& commandPool, const std::vector<T>& stream, bool isSBO = false);
 public:
 	void init(Device& device, CommandPool& commandPool, MeshData* meshData);
@@ -63,13 +62,13 @@ public:
 	inline uint32_t getIndexCount() { return m_indexCount; }
 };
 
-template<typename T, typename B>
+template<typename T>
 inline void Mesh::addVertexBuffer(CommandPool& commandPool, const std::vector<T>& stream, bool isSBO)
 {
 	if (stream.size() == 0)
 		return;
 
-	VkDeviceSize bufferSize = sizeof(B) * stream.size();
+	VkDeviceSize bufferSize = sizeof(T) * stream.size();
 	Buffer stagingBuffer;
 	stagingBuffer.init(*p_device,
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,

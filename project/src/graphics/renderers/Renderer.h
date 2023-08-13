@@ -47,30 +47,56 @@ struct Material
 	float metallic;
 };
 
+struct ColDetectionUBO
+{
+	float deltaTime;
+	uint32_t triCount;
+};
+
+struct ColConstraint
+{
+	alignas(16) glm::vec3 orig;
+	alignas(4) uint32_t particleIndex;
+	alignas(16) glm::vec3 normal;
+};
+
 struct SoftBody
 {
 	Mesh mesh;
 	TetrahedralMesh tetMesh;
+
 	DescriptorSet graphicsDescriptorSet;
 	DescriptorSet pbdDescriptorSet;
+	DescriptorSet colDescriptorSet;
 	DescriptorSet deformDescriptorSet;
-	glm::vec3 color;
-	bool useTetDeformation = false;
 
 	// Buffer used to deform the original mesh, either directly in the form of indices or in the form of tetrahedral deformation
 	Buffer deformBuffer;
+
+	// Collision buffers
+	std::vector<Buffer> colSizeBuffer;
+	std::vector<Buffer> colConstraintBuffer;
 
 	// UBO information in pbd and deform shaders
 	UniformBuffer<glm::uvec3> pbdUBO; // (particleCount, edgeCount, tetrahedralCount)
 	UniformBuffer<glm::uvec2> deformUBO; // (vertexCount, indexCount)
 
 	bool active = false;
+	bool useTetDeformation = false;
+	glm::vec3 color;
+
 	void cleanup()
 	{
 		if (active)
 		{
+			for (int i = 0, len = (int)colConstraintBuffer.size(); i < len; i++)
+			{
+				colConstraintBuffer[i].cleanup();
+				colSizeBuffer[i].cleanup();
+			}
 			deformBuffer.cleanup();
 			deformDescriptorSet.cleanup();
+			colDescriptorSet.cleanup();
 			pbdDescriptorSet.cleanup();
 			graphicsDescriptorSet.cleanup();
 			deformUBO.cleanup();
@@ -88,6 +114,7 @@ public:
 	const static int MAX_FRAMES_IN_FLIGHT = 2;
 	const static int MAX_SOFT_BODY_COUNT = 50;
 	const static int MAX_FRAME_MEASUREMENT_COUNT = 1000;
+	const static int MAX_COLLISION_CONSTRAINT_COUNT = 10000;
 
 	const static int COLOR_COUNT = 7;
 	inline const static glm::vec3 COLORS[COLOR_COUNT] = 
@@ -147,6 +174,17 @@ private:
 	std::array<SoftBody, MAX_SOFT_BODY_COUNT> m_softBodies;
 	std::vector<SoftBody*> m_removeBodies; // Removed after their execution is done
 
+	// Collision
+	std::vector<UniformBuffer<ColDetectionUBO>> m_colUBO;
+	Buffer m_colPositionsBuffer;
+	Buffer m_colIndicesBuffer;
+
+	PipelineLayout m_colPipelineLayout;
+	DescriptorSetLayout m_colDescriptorSetLayout;
+	DescriptorSet m_colDescriptorSet;
+	Pipeline m_staticColDetectionPipeline;
+	Pipeline m_colConstraintPipeline;
+
 	// Measurement related
 	uint32_t m_measureFrameCounter = MAX_FRAME_MEASUREMENT_COUNT;
 	uint32_t m_warmupCounter = 0; // Used to wait a couple of steps when measuring the error
@@ -193,6 +231,7 @@ private:
 	ShadowRenderer m_shadowRenderer;
 
 	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+	void detectCollisions(VkCommandBuffer commandBuffer, SoftBody& softBody);
 	void computePhysics(VkCommandBuffer commandBuffer, SoftBody& softBody);
 	void deformMesh(VkCommandBuffer commandBuffer, SoftBody& softBody);
 	void createSyncObjects();

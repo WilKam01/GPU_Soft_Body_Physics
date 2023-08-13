@@ -1,0 +1,82 @@
+#version 450
+#extension GL_EXT_shader_atomic_float : enable
+
+#define g -9.82
+#define epsilon 0.000001
+#define maxConstraints 10000
+
+layout(set = 0, binding = 0) uniform UBO
+{
+    float deltaTime;
+    uint triCount;
+} ubo;
+
+layout(set = 1, binding = 0) uniform InfoUBO
+{
+    uint particleCount;
+    uint edgeCount;
+    uint tetrahedralCount;
+} info;
+
+struct Particle
+{
+    vec3 position;
+    vec3 velocity;
+	float invMass;
+};
+
+layout(std140, set = 1, binding = 1) buffer ParticlesSSBO
+{
+	Particle particles[];
+};
+
+struct PbdPositions
+{
+	vec3 predict;
+    vec3 delta;
+};
+
+layout(std140, set = 1, binding = 2) buffer PositionsSSBO
+{
+	PbdPositions positions[];
+};
+
+layout(set = 1, binding = 3) buffer Size 
+{
+    uint colSize;
+};
+
+struct ColConstraint
+{
+    vec3 orig;
+    uint particleIndex;
+    vec3 normal;
+};
+
+layout(std140, set = 1, binding = 4) buffer ColConstraintSSBO
+{
+	ColConstraint colConstraints[];
+};
+
+layout(local_size_x = 32) in;
+
+void main()
+{
+    uint index = gl_GlobalInvocationID.x;
+	if(index >= colSize)
+		return;
+
+    vec3 pos = positions[colConstraints[index].particleIndex].predict;
+    float gradient = min(
+                        dot(
+                            pos - colConstraints[index].orig,
+                            colConstraints[index].normal
+                        ),
+                        0.0
+                    );
+    vec3 corrVec = -gradient * colConstraints[index].normal;
+    for(int i = 0; i < 3; i++)
+    {
+        atomicAdd(positions[colConstraints[index].particleIndex].delta[i], corrVec[i]);
+    }
+}

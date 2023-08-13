@@ -9,9 +9,9 @@ void Mesh::init(Device& device, CommandPool& commandPool, MeshData* meshData)
     m_indexCount = (uint32_t)meshData->indices.size();
 
     // Vertex buffers
-    addVertexBuffer<avec3, avec3>(commandPool, meshData->vertices.positions, true);
-    addVertexBuffer<avec3, avec3>(commandPool, meshData->vertices.normals, true);
-    addVertexBuffer<glm::vec2, glm::vec2>(commandPool, meshData->vertices.uvs);
+    addVertexBuffer<avec3>(commandPool, meshData->vertices.positions, true);
+    addVertexBuffer<avec3>(commandPool, meshData->vertices.normals, true);
+    addVertexBuffer<glm::vec2>(commandPool, meshData->vertices.uvs);
 
     // Index buffer
     Buffer stagingBuffer;

@@ -77,6 +77,8 @@ void main()
 
 		w += dot(normals[i], normals[i]) * particles[ids[i]].invMass;
 	}
+	if(w == 0.0)
+		return;
 
 	float volume = dot(
 		cross(

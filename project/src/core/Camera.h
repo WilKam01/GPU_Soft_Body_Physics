@@ -9,6 +9,10 @@ private:
 	glm::vec3 m_rotation;
 	glm::mat4 m_matrix;
 
+	glm::vec3 m_forward;
+	glm::vec3 m_right;
+	glm::vec3 m_up;
+
 	float m_fov;
 	float m_aspectRatio;
 
@@ -18,6 +22,7 @@ public:
 	void setPosition(glm::vec3 pos);
 	void setRotation(glm::vec3 rot);
 	void updateAspectRatio(float aspectRatio);
+	glm::vec3 toLocal(glm::vec3 vec);
 
 	inline glm::vec3 getPosition() { return m_position; }
 	inline glm::vec3 getRotation() { return m_rotation; }

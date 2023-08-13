@@ -123,7 +123,14 @@ TetrahedralMeshData ResourceManager::loadTetrahedralMeshOBJ(const std::string& p
         mesh.particles[i - 1].invMass = 0.0f;
     }
 
+    const uint8_t surfaceIndices[12] = {
+        2, 1, 0,
+        0, 1, 3,
+        1, 2, 3,
+        2, 0, 3
+    };
     std::set<std::string> uniqueEdges;
+    std::unordered_map<std::string, glm::uvec3> uniqueTriangles;
     for (int i = 0, len = (int)mesh.tets.size(); i < len; i++)
     {
         glm::uvec4 ids(
@@ -248,13 +255,14 @@ SoftBodyData* ResourceManager::getSoftBody(std::string name, int resolution)
 
             // Get nearby vertices
             std::vector<uint32_t> ids = hash.query(tetCenter, maxRadius);
+            maxRadius *= maxRadius;
             for (auto id : ids)
             {
                 if (minDist[id] <= 0.0f)
                     continue;
 
                 glm::vec3 diff = positions[id] - tetCenter;
-                if (glm::dot(diff, diff) > maxRadius * maxRadius)
+                if (glm::dot(diff, diff) > maxRadius)
                     continue;
 
                 diff = positions[id] - data.tetMesh.particles[data.tetMesh.tets[i].indices[3]].position;

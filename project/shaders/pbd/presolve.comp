@@ -46,14 +46,7 @@ void main()
 		return;
 
 	positions[index].delta = vec3(0.0);
-	particles[index].velocity += vec3(0.0, 1.0, 0.0) * ubo.deltaTime * g;
+	particles[index].velocity.y += ubo.deltaTime * g;
 	particles[index].position = positions[index].predict;
 	positions[index].predict += particles[index].velocity * ubo.deltaTime;
-
-	// Hit ground
-	if(positions[index].predict.y < 0.0)
-	{
-		positions[index].predict = particles[index].position;
-		positions[index].predict.y = 0.0;
-	}
 }

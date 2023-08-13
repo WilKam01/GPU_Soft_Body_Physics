@@ -46,7 +46,8 @@ public:
 		const std::string& vertexShaderPath,
 		const std::string& fragmentShaderPath,
 		PipelineSettings settings,
-		VertexStreamInput inputStreams
+		VertexStreamInput inputStreams,
+		VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
 	);
 	void initGraphics(
 		Device& device,
