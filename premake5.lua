@@ -1,5 +1,6 @@
 workspace "thesis"
     architecture "x86_64"
+    startproject "project"
 
     configurations {
         "Debug",
